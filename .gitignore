@@ -5,3 +5,4 @@ output/
 试玩输出/
 *.app/
 *.zip
+.runtime/
