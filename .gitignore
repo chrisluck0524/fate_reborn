@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+dist/
+output/
+试玩输出/
+*.app/
+*.zip
