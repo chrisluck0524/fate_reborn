@@ -51,6 +51,11 @@ export const EQUIPMENT_DEFINITIONS = {
   fate_evasion_charm: armor(["fate_evasion_charm_ready", "fate_evasion_charm_block"]),
 };
 
+for (const name of Object.keys(EQUIPMENT_DEFINITIONS)) {
+  EQUIPMENT_DEFINITIONS[name].fullimage = true;
+  EQUIPMENT_DEFINITIONS[name].image = `ext:fate-reborn/assets/cards/${name}.jpg`;
+}
+
 export const EQUIPMENT_SKILLS = {
   fate_eye_of_skadi_skill: {
     equipSkill: true,

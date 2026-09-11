@@ -424,6 +424,37 @@ export const SPECIAL_SKILLS = {
   },
 };
 
+const CARD_IMAGE_PATH = name => `ext:fate-reborn/assets/cards/${name}.jpg`;
+
+for (const name of [
+  "fate_fanatical",
+  "fate_misdirection",
+  "fate_chakra",
+  "fate_wild_axes",
+  "fate_disarm",
+  "fate_moon_arrow",
+  "fate_energy_transfer",
+  "fate_greed",
+  "fate_siren_song",
+  "fate_divine_strength",
+  "fate_viper_strike",
+  "fate_time_stop",
+  "fate_soul_separation",
+  "fate_laguna_blade",
+]) {
+  CARD_DEFINITIONS[name].fullimage = true;
+  CARD_DEFINITIONS[name].image = CARD_IMAGE_PATH(name);
+}
+
+export const BASIC_CARD_IMAGES = Object.freeze({
+  normal: CARD_IMAGE_PATH("fate_basic_attack"),
+  chaos: CARD_IMAGE_PATH("fate_chaos_attack"),
+  fire: CARD_IMAGE_PATH("fate_fire_attack"),
+  dodge: CARD_IMAGE_PATH("fate_dodge"),
+  healing: CARD_IMAGE_PATH("fate_healing_ointment"),
+  dispel: CARD_IMAGE_PATH("fate_dispel"),
+});
+
 export const CARD_TRANSLATIONS = {
   fate_fanatical: "狂热",
   fate_fanatical_info: "出牌阶段，对自己使用。你对自己造成1点伤害；若仍存活，本回合可使用任意数量的攻击。",

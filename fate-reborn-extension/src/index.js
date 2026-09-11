@@ -1,5 +1,5 @@
 import { lib, game, ui, get, _status } from "noname";
-import { CARD_DEFINITIONS, CARD_TRANSLATIONS, SPECIAL_SKILLS } from "./cards.js";
+import { BASIC_CARD_IMAGES, CARD_DEFINITIONS, CARD_TRANSLATIONS, SPECIAL_SKILLS } from "./cards.js";
 import { EQUIPMENT_DEFINITIONS, EQUIPMENT_SKILLS, EQUIPMENT_TRANSLATIONS } from "./equipment.js";
 import { ACTIVE_SKILL_PROMPT, STRENGTH_HERO_CARDS, STRENGTH_HERO_SKILLS, STRENGTH_HERO_TRANSLATIONS } from "./heroes-strength.js";
 import { INTELLIGENCE_HERO_CARDS, INTELLIGENCE_HERO_SKILLS, INTELLIGENCE_HERO_TRANSLATIONS } from "./heroes-intelligence.js";
@@ -81,6 +81,19 @@ async function chooseTestParticipant(controller, label, pool) {
   };
 }
 
+async function chooseStandardAiHero(player, label, pool) {
+  const choices = pool.randomRemove(Math.min(3, pool.length));
+  if (!choices.length) return null;
+  const result = await player
+    .chooseButton(true, [`${label}：从3名候选英雄中选择`, [choices, "character"]])
+    .set("ai", button => {
+      const hero = HEROES[button.link];
+      return hero ? hero[2] * 10 + hero[3].length : 0;
+    })
+    .forResult();
+  return result.links?.[0] || choices[0];
+}
+
 const HERO_NAMES = {
   fate_abaddon: "亚巴顿",
   fate_skeleton_king: "骷髅王",
@@ -135,6 +148,16 @@ function createMode(testing = false) {
       async () => {
         lib.card.list = ACTIVE_DECK.map(card => [...card]);
         lib.inpile = Array.from(new Set(ACTIVE_DECK.map(card => card[2])));
+        lib.card.sha.fullimage = true;
+        // The engine resolves a card image before it applies the card's nature.
+        // Nature-specific artwork is therefore selected by the CSS rules below.
+        lib.card.sha.image = BASIC_CARD_IMAGES.normal;
+        lib.card.shan.fullimage = true;
+        lib.card.shan.image = BASIC_CARD_IMAGES.dodge;
+        lib.card.tao.fullimage = true;
+        lib.card.tao.image = BASIC_CARD_IMAGES.healing;
+        lib.card.wuxie.fullimage = true;
+        lib.card.wuxie.image = BASIC_CARD_IMAGES.dispel;
         game.fixedPile = true;
         lib.translate.sha = "攻击";
         lib.translate.shan = "闪避";
@@ -193,12 +216,18 @@ function createMode(testing = false) {
             player.storage.fate_test_setup = setup;
           }
         } else {
-          const choices = pool.randomRemove(3);
-          const result = await game.me.chooseButton(true, ["选择一名宿命英雄", [choices, "character"]]).forResult();
-          selected = result.links?.[0] || choices[0];
+          const availableHeroes = pool.slice();
+          const result = await game.me
+            .chooseButton(true, ["选择一名宿命英雄（完整英雄池）", [availableHeroes, "character"]])
+            .forResult();
+          selected = result.links?.[0] || availableHeroes[0];
+          pool.remove(selected);
           game.me.init(selected);
-          for (const player of game.players) {
-            if (player !== game.me) player.init(pool.randomRemove());
+          for (let index = 0; index < game.players.length; index += 1) {
+            const player = game.players[index];
+            if (player === game.me) continue;
+            const aiHero = await chooseStandardAiHero(player, `AI ${index}`, pool);
+            if (aiHero) player.init(aiHero);
           }
         }
 
@@ -459,6 +488,8 @@ export default function fateRebornExtension() {
         .fate-standalone #splash > div.clicked { transform: translateY(-50%) scale(1.05); opacity: 0; }
         .fate-standalone .menu-tab > div:nth-child(n+4),
         .fate-standalone .new-menu-tab > div:nth-child(n+4) { display: none !important; }
+        .card.fate_chaos.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_chaos_attack.jpg") !important; }
+        .card.fate_fire.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_fire_attack.jpg") !important; }
       `;
       document.head.appendChild(standaloneStyle);
       game.addNature("fate_chaos", "混乱", { linked: false, order: 5, color: "#7d5ba6" });

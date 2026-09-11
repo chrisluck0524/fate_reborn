@@ -147,6 +147,23 @@ export function requiredDodges({ base = 1, extra = 0, frozen = false } = {}) {
   return (base + extra) * (frozen ? 2 : 1);
 }
 
+export function isUsefulCastTarget(kind, { attitude = 0, damaged = false, hp = Infinity, hand = 0 } = {}) {
+  switch (kind) {
+    case "heartstopper":
+      return attitude < 0 && damaged;
+    case "crystal_frost":
+      return attitude < 0 && hand > 0;
+    case "shallow_grave":
+      return attitude > 0 && hp <= 1;
+    case "bloodseeker":
+      return attitude < 0 && hand > 0;
+    case "techies_detonate":
+      return attitude < 0;
+    default:
+      return false;
+  }
+}
+
 export function evaluateNeutralFate(fateId, neutral, players) {
   if (!neutral?.alive) return false;
   const alive = players.filter(player => player.alive);

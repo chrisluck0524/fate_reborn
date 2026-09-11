@@ -1,10 +1,10 @@
 # 宿命 Reborn
 
-基于 [无名杀](https://github.com/libnoname/noname) 制作的多人身份卡牌游戏扩展。此仓库保存可维护的开发源码与规则资料；本地试玩程序、Node 依赖、构建产物和收集中的美术资源不纳入版本库。
+基于 [无名杀](https://github.com/libnoname/noname) 制作的多人身份卡牌游戏扩展。此仓库保存可维护的开发源码、已整理的卡牌与英雄资源和规则资料；本地试玩程序、Node 依赖和构建产物不纳入版本库。
 
 ## 内容
 
-- `fate-reborn-extension/`：宿命模式的扩展源码、规则测试、构建配置与图片放置说明。
+- `fate-reborn-extension/`：宿命模式的扩展源码、规则测试、构建配置和卡牌/英雄资源。
 - `engine-patches/noname-engine-customizations.patch`：对无名杀引擎和桌面启动外观的本地改动补丁。
 - `game-docs/`：英雄表、规则书、卡牌效果与技能核查记录。
 - `tools/`：macOS 打包辅助脚本。

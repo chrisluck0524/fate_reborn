@@ -13,6 +13,7 @@ import {
   evaluateWinner,
   gainRage,
   requiredDodges,
+  isUsefulCastTarget,
 } from "../src/rules.js";
 import { gainFateRage } from "../src/rage.js";
 
@@ -77,7 +78,20 @@ test("实际获得怒气会让复仇之魂摸等量牌，满怒时不触发", as
 });
 
 test("冰霜禁制将叠加后的闪避数翻倍", () => {
+  assert.equal(requiredDodges({ base: 1, frozen: true }), 2);
+  assert.equal(requiredDodges({ base: 2, frozen: true }), 4);
   assert.equal(requiredDodges({ base: 2, extra: 1, frozen: true }), 6);
+});
+
+test("施法技能的AI目标只在有明确收益时成立", () => {
+  assert.equal(isUsefulCastTarget("heartstopper", { attitude: -3, damaged: true }), true);
+  assert.equal(isUsefulCastTarget("heartstopper", { attitude: -3, damaged: false }), false);
+  assert.equal(isUsefulCastTarget("crystal_frost", { attitude: -3, hand: 2 }), true);
+  assert.equal(isUsefulCastTarget("crystal_frost", { attitude: -3, hand: 0 }), false);
+  assert.equal(isUsefulCastTarget("shallow_grave", { attitude: 3, hp: 1 }), true);
+  assert.equal(isUsefulCastTarget("shallow_grave", { attitude: -3, hp: 1 }), false);
+  assert.equal(isUsefulCastTarget("bloodseeker", { attitude: -3, hand: 1 }), true);
+  assert.equal(isUsefulCastTarget("techies_detonate", { attitude: 3 }), false);
 });
 
 test("中立宿命优先于阵营胜利", () => {
