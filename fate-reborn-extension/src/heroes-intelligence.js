@@ -67,7 +67,7 @@ const active = {
 registerPhaseUseActiveSkills(active);
 
 export const INTELLIGENCE_HERO_CARDS = {
-  fate_jakiro_ice_effect: trick(other, async (event, trigger, player) => { const target = event.target; const cards = target.getCards("h").randomGets(2); if (cards.length) { await target.lose(cards, ui.special); const expansion = await player.addToExpansion(cards, "gain2"); expansion.gaintag.add("fate_ice_prison"); } target.addTempSkill("fate_ice_prison_target", { global: "phaseAfter" }); player.storage.fate_ice_prison_target = target.playerid; player.addTempSkill("fate_ice_prison_release", "phaseAfter"); }),
+  fate_jakiro_ice_effect: trick(other, async (event, trigger, player) => { const target = event.target; const cards = target.getCards("h").randomGets(2); if (cards.length) { await target.lose(cards, ui.special); const expansion = await player.addToExpansion(cards, "gain2"); expansion.gaintag.add("fate_ice_prison"); target.addTempSkill("fate_ice_prison_target", { global: "phaseAfter" }); } player.storage.fate_ice_prison_target = target.playerid; player.addTempSkill("fate_ice_prison_release", "phaseAfter"); }),
   fate_lich_feast_effect: trick(() => true, async (event, trigger, player) => { await player.draw(2); }),
   fate_shadow_wave_effect: trick(other, async (event, trigger, player) => { await event.target.damage({ num: 1, source: player }); }),
   fate_keeper_wave_effect: trick(other, async (event, trigger, player) => { await event.target.damage({ num: 1, source: player }); }),
