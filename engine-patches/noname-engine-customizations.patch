@@ -100,6 +100,50 @@ index eb397bf..0876bde 100644
 +4. 若以上步骤均无法解决问题，请将错误信息反馈给开发者`);
  	}
  })();
+diff --git a/apps/core/noname/get/index.js b/apps/core/noname/get/index.js
+index 8614c06..34bc54e 100644
+--- a/apps/core/noname/get/index.js
++++ b/apps/core/noname/get/index.js
+@@ -4111,6 +4111,12 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
+ 			return str2;
+ 		}
+ 		if (arg == "skill") {
++			// Fate Reborn's standalone client uses the complete skill name in all
++			// skill-choice and skill-intro surfaces.  Other modes keep the engine's
++			// traditional two-character skill labels.
++			if (lib.config.fate_standalone && lib.translate[str]) {
++				return lib.translate[str];
++			}
+ 			if (lib.translate[str + "_ab"]) {
+ 				return lib.translate[str + "_ab"];
+ 			}
+@@ -4968,7 +4974,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
+ 				} else {
+ 					opacity = "";
+ 				}
+-				var skilltrans = get.translation(skills[i]).slice(0, 2);
++				var skilltrans = lib.config.fate_standalone ? get.translation(skills[i]) : get.translation(skills[i]).slice(0, 2);
+ 				str += '<div class="skill" style="' + opacity + '">【' + skilltrans + '】</div><div style="' + opacity + '">' + get.skillInfoTranslation(skills[i], null, false) + '</div><div style="display:block;height:10px"></div>';
+ 			}
+ 		}
+@@ -5288,7 +5294,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
+ 					} else {
+ 						translation = get.translation(skills[i]);
+ 						if (!lib.skill[skills[i]].nobracket) {
+-							translation = `【${translation.slice(0, 2)}】`;
++							translation = `【${lib.config.fate_standalone ? translation : translation.slice(0, 2)}】`;
+ 						}
+ 					}
+ 
+@@ -6108,7 +6114,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
+ 						} else {
+ 							translation = get.translation(skills[i]);
+ 							if (!lib.skill[skills[i]].nobracket) {
+-								translation = `【${translation.slice(0, 2)}】`;
++								translation = `【${lib.config.fate_standalone ? translation : translation.slice(0, 2)}】`;
+ 							}
+ 						}
+ 
 diff --git a/apps/core/noname/init/index.ts b/apps/core/noname/init/index.ts
 index 07358a6..526ea46 100644
 --- a/apps/core/noname/init/index.ts
@@ -154,6 +198,27 @@ index d36521a..9c2aa1f 100644
  const nodeList = ref<HTMLElement[]>([]);
  let clicked = false;
  
+diff --git a/apps/core/noname/library/element/content.ts b/apps/core/noname/library/element/content.ts
+index 0d03296..bd0dd5f 100644
+--- a/apps/core/noname/library/element/content.ts
++++ b/apps/core/noname/library/element/content.ts
+@@ -7332,10 +7332,12 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 			for (const skill of list) {
+ 				if (lib.translate[`${skill}_info`]) {
+ 					let translation = get.translation(skill);
+-					if (translation[0] == "新" && translation.length == 3) {
+-						translation = translation.slice(1, 3);
+-					} else {
+-						translation = translation.slice(0, 2);
++					if (!lib.config.fate_standalone) {
++						if (translation[0] == "新" && translation.length == 3) {
++							translation = translation.slice(1, 3);
++						} else {
++							translation = translation.slice(0, 2);
++						}
+ 					}
+ 					const item = dialog.add(`<div class="popup pointerdiv" style="width:80%;display:inline-block"><div class="skill">【${translation}】</div><div>${lib.translate[`${skill}_info`]}</div></div>`);
+ 					item.firstChild.addEventListener("click", clickItem(skill));
 diff --git a/apps/core/noname/ui/create/index.js b/apps/core/noname/ui/create/index.js
 index 44b0236..8490f67 100644
 --- a/apps/core/noname/ui/create/index.js

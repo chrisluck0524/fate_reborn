@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="1440" viewBox="0 0 920 1440">
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="34%" r="78%">
+      <stop offset="0" stop-color="#39405c"/>
+      <stop offset=".48" stop-color="#161929"/>
+      <stop offset="1" stop-color="#07080e"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff0b3"/>
+      <stop offset=".45" stop-color="#c99c45"/>
+      <stop offset="1" stop-color="#6f431d"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="15" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="920" height="1440" fill="url(#sky)"/>
+  <g fill="#e6d79d" opacity=".65">
+    <circle cx="112" cy="184" r="3"/><circle cx="730" cy="120" r="4"/><circle cx="822" cy="364" r="2"/>
+    <circle cx="204" cy="477" r="2"/><circle cx="691" cy="596" r="3"/><circle cx="120" cy="850" r="4"/>
+    <circle cx="790" cy="1050" r="3"/><circle cx="310" cy="1140" r="2"/>
+  </g>
+  <circle cx="460" cy="550" r="255" fill="none" stroke="#b8843c" stroke-width="5" opacity=".35" filter="url(#glow)"/>
+  <circle cx="460" cy="550" r="188" fill="none" stroke="url(#gold)" stroke-width="12"/>
+  <path d="M460 270 525 448 715 455 564 570 615 752 460 648 305 752 356 570 205 455 395 448Z" fill="none" stroke="url(#gold)" stroke-width="18" stroke-linejoin="round" filter="url(#glow)"/>
+  <circle cx="460" cy="550" r="72" fill="#0b0d16" stroke="url(#gold)" stroke-width="10"/>
+  <path d="M430 550 458 578 510 514" fill="none" stroke="#f7e7aa" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M90 1120 Q460 980 830 1120 L830 1440 90 1440Z" fill="#080910" opacity=".82"/>
+  <text x="460" y="1200" text-anchor="middle" fill="#f1d997" font-family="serif" font-size="106" font-weight="700" letter-spacing="24">宿命</text>
+  <text x="460" y="1280" text-anchor="middle" fill="#bd9652" font-family="serif" font-size="38" letter-spacing="17">REBORN</text>
+  <text x="460" y="1340" text-anchor="middle" fill="#b6b3a7" font-family="sans-serif" font-size="24" letter-spacing="7">五人身份对战</text>
+</svg>
