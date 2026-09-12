@@ -377,6 +377,9 @@ export const SPECIAL_SKILLS = {
   },
   fate_divine_strength_effect: {
     charlotte: true,
+    mark: true,
+    marktext: "力",
+    intro: { content: "本回合攻击伤害+1。" },
     trigger: { source: "damageBegin1" },
     forced: true,
     filter(event) {
@@ -390,6 +393,7 @@ export const SPECIAL_SKILLS = {
     charlotte: true,
     mark: true,
     marktext: "禁",
+    intro: { content: "跳过下个摸牌阶段。" },
     trigger: { player: "phaseDrawBefore" },
     forced: true,
     async content(event, trigger, player) {
@@ -401,6 +405,7 @@ export const SPECIAL_SKILLS = {
     charlotte: true,
     mark: true,
     marktext: "停",
+    intro: { content: "跳过下回合摸牌、出牌和弃牌阶段。" },
     trigger: { player: ["phaseDrawBefore", "phaseUseBefore", "phaseDiscardBefore"] },
     forced: true,
     async content(event, trigger) {
@@ -411,6 +416,7 @@ export const SPECIAL_SKILLS = {
     charlotte: true,
     mark: true,
     marktext: "眠",
+    intro: { content: "跳过下回合摸牌、出牌和弃牌阶段，且不能成为其他角色卡牌的目标。" },
     trigger: { player: ["phaseDrawBefore", "phaseUseBefore", "phaseDiscardBefore"] },
     forced: true,
     mod: {
