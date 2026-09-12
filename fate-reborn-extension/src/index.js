@@ -6,6 +6,7 @@ import { INTELLIGENCE_HERO_CARDS, INTELLIGENCE_HERO_SKILLS, INTELLIGENCE_HERO_TR
 import { AGILITY_HERO_CARDS, AGILITY_HERO_SKILLS, AGILITY_HERO_TRANSLATIONS } from "./heroes-agility.js";
 import { gainFateRage } from "./rage.js";
 import { ACTIVE_DECK, FATES, FACTION, dealPlayerIdentities, evaluateWinner } from "./rules.js";
+import { FATE_LAYOUT_STYLE, installFateLayout } from "./ui-layout.js";
 
 export const type = "extension";
 
@@ -265,6 +266,7 @@ function createMode(testing = false) {
         }
       },
       async (event) => {
+        game.addGlobalSkill("fate_ui_layout");
         game.addGlobalSkill("fate_cast_phase");
         game.addGlobalSkill("fate_settled_victory_check");
         game.addGlobalSkill("fate_s_card_cost");
@@ -416,6 +418,15 @@ function createMode(testing = false) {
         },
       },
       fate_active_skill_prompt: ACTIVE_SKILL_PROMPT,
+      fate_ui_layout: {
+        trigger: { global: "gameStart" },
+        forced: true,
+        popup: false,
+        lastDo: true,
+        content() {
+          game.fateInstallLayout?.();
+        },
+      },
     },
     translate: {
       fate_reborn: "宿命",
@@ -490,21 +501,15 @@ export default function fateRebornExtension() {
         .fate-standalone .new-menu-tab > div:nth-child(n+4) { display: none !important; }
         .card.fate_chaos.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_chaos_attack.jpg") !important; }
         .card.fate_fire.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_fire_attack.jpg") !important; }
+        ${FATE_LAYOUT_STYLE}
       `;
       document.head.appendChild(standaloneStyle);
+      game.fateInstallLayout = installFateLayout;
       game.addNature("fate_chaos", "混乱", { linked: false, order: 5, color: "#7d5ba6" });
       game.addNature("fate_fire", "火焰", { linked: false, order: 6, color: "#b64a35" });
       game.addGroup("fate_strength", "力", "力量", { color: "#a33" });
       game.addGroup("fate_intelligence", "智", "智力", { color: "#4b72a8" });
       game.addGroup("fate_agility", "敏", "敏捷", { color: "#478d57" });
-      // Native skill controls prefer the `_ab` translation.  Supply the full
-      // skill name instead of allowing the client to generate a two-character
-      // abbreviation for every Fate hero skill.
-      for (const hero of Object.values(HEROES)) {
-        for (const skill of hero[3]) {
-          if (lib.translate[skill]) lib.translate[`${skill}_ab`] = lib.translate[skill];
-        }
-      }
       if (!lib.mode.fate_reborn) {
         game.addMode("fate_reborn", createMode(false), {
           translate: "宿命",
