@@ -120,6 +120,13 @@ export const FATE_LAYOUT_STYLE = `
     font-size: 7px !important;
   }
 
+  .fate-standalone .fate-self-status-empty {
+    display: block;
+    color: #d4d4d4;
+    font-size: .8em;
+    line-height: 1.25;
+  }
+
   .fate-standalone .fate-equipment {
     left: 0;
     bottom: 1.5%;
@@ -175,6 +182,64 @@ export const FATE_LAYOUT_STYLE = `
     height: 18.3%;
     padding: 7px;
     overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .fate-standalone .fate-persistent-skills {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 34px;
+    bottom: 6px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    pointer-events: auto;
+  }
+
+  .fate-standalone .fate-persistent-skill {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 28px;
+    margin: 2px 0;
+    padding: 2px 3px 2px 29px;
+    border: 1px solid #272727;
+    background: #858585;
+    color: #d0d0d0;
+    text-align: left;
+    line-height: 1.15;
+    font-size: clamp(10px, .86vw, 14px);
+    overflow-wrap: anywhere;
+    cursor: default;
+    position: relative;
+  }
+
+  .fate-standalone .fate-persistent-skill::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    border: 1px solid #4a4a4a;
+    background: #b7b7b7;
+  }
+
+  .fate-standalone .fate-persistent-skill.fate-skill-ready {
+    color: #fff;
+    border-color: #e0e0e0;
+    background: #6f6f6f;
+    cursor: pointer;
+  }
+
+  .fate-standalone .fate-persistent-skill.fate-skill-ready::before {
+    background: #d6d6d6;
+  }
+
+  /* The engine control remains mounted for its click and cleanup semantics;
+     the permanent rows above are the user-facing controls. */
+  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control {
+    display: none !important;
   }
 
   .fate-standalone .fate-skill-panel-title::before {
@@ -536,6 +601,15 @@ const SLOT_SELECTIONS = {
   7: [0, 1, 2, 3, 4, 5, 6],
 };
 
+const PERMANENT_SKILL_EXCLUDE = /(?:_effect|_card|_ready|_once|_cost|_target|_rule)$/;
+const LOG_NOISE = [
+  /进入.*(?:准备|摸牌|判定|出牌|弃牌)阶段/,
+  /进入.*施法阶段/,
+  /的回合开始$/,
+  /摸了[^ ]*张牌$/,
+];
+const LOG_REPEAT_WINDOW = 10;
+
 function text(value) {
   return value == null ? "—" : String(value);
 }
@@ -569,22 +643,86 @@ function updateSelfStatus(panel) {
   if (!game.me || !panel) return;
   const player = game.me;
   const marks = player.node?.marks;
-  const hand = player.countCards ? player.countCards("h") : 0;
-  const weapon = player.getEquip ? player.getEquip(1) : null;
-  const armor = player.getEquip ? player.getEquip(2) : null;
-  const name = get.translation(player.name || player.name1 || "玩家");
+  const activeMarks = marks ? Math.max(0, marks.childElementCount - 1) : 0;
   panel.innerHTML = `
     <span class="fate-self-status-title">玩家状态</span>
-    <span class="fate-self-status-row">英雄：${text(name)}</span>
-    <span class="fate-self-status-row">生命：${text(player.hp)}/${text(player.maxHp)}</span>
-    <span class="fate-self-status-row">怒气：${text(player.countMark?.("fate_rage_rule") || 0)}/3</span>
-    <span class="fate-self-status-row">手牌：${text(hand)}</span>
-    <span class="fate-self-status-row">武器：${text(weapon ? get.translation(weapon) : "无")}</span>
-    <span class="fate-self-status-row">防具：${text(armor ? get.translation(armor) : "无")}</span>
+    <span class="fate-self-status-empty">${activeMarks ? "" : "暂无状态"}</span>
   `;
   // The status text is refreshed as cards and rage change. Reattach the native
   // mark strip after replacing that text so self buffs remain visible here.
   if (marks) panel.appendChild(marks);
+}
+
+function getPermanentSkills() {
+  if (!game.me) return [];
+  const skills = game.me.getSkills?.() || game.me.skills || [];
+  return [...new Set(skills)].filter(skill =>
+    typeof skill === "string" &&
+    skill.startsWith("fate_") &&
+    !PERMANENT_SKILL_EXCLUDE.test(skill) &&
+    lib.translate[skill] &&
+    lib.translate[`${skill}_info`],
+  );
+}
+
+function createPersistentSkills(panel) {
+  if (!panel || panel._fatePersistentSkills) return;
+  const container = document.createElement("div");
+  container.className = "fate-persistent-skills";
+  panel.appendChild(container);
+  const buttons = new Map();
+  for (const skill of getPermanentSkills()) {
+    const button = document.createElement("div");
+    button.className = "fate-persistent-skill";
+    button.dataset.skill = skill;
+    button.textContent = get.translation(skill);
+    button.title = lib.translate[`${skill}_info`];
+    button.addEventListener("click", () => {
+      const native = panel.querySelector(`.control.fate-skill-control [data-fate-skill="${skill}"]`);
+      if (native) native.click();
+    });
+    container.appendChild(button);
+    buttons.set(skill, button);
+  }
+  panel._fatePersistentSkills = { container, buttons };
+}
+
+function syncPersistentSkills(panel) {
+  const state = panel?._fatePersistentSkills;
+  if (!state) return;
+  const nativeButtons = Array.from(panel.querySelectorAll(".control.fate-skill-control > div"));
+  for (const native of nativeButtons) {
+    if (typeof native.link === "string") native.dataset.fateSkill = native.link;
+  }
+  for (const [skill, button] of state.buttons) {
+    const active = nativeButtons.some(native => native.dataset.fateSkill === skill);
+    button.classList.toggle("fate-skill-ready", active);
+    button.setAttribute("aria-disabled", active ? "false" : "true");
+  }
+}
+
+function cleanLog(log) {
+  if (!log || log.dataset.fateCleaning === "1") return;
+  log.dataset.fateCleaning = "1";
+  try {
+    const entries = Array.from(log.children);
+    let previous = "";
+    const recent = [];
+    for (const entry of entries) {
+      const content = entry.textContent?.replace(/\s+/g, " ").trim() || "";
+      const repeated = content && recent.includes(content);
+      if (LOG_NOISE.some(pattern => pattern.test(content)) || content === previous || repeated) {
+        entry.remove();
+        continue;
+      }
+      previous = content;
+      recent.push(content);
+      if (recent.length > LOG_REPEAT_WINDOW) recent.shift();
+    }
+    while (log.children.length > 120) log.firstElementChild?.remove();
+  } finally {
+    log.dataset.fateCleaning = "0";
+  }
 }
 
 function updateTableInfo(roundInfo, aliveInfo) {
@@ -647,11 +785,13 @@ function enableLogScroll(log) {
   if (!log || log.dataset.fateScrollReady) return;
   log.dataset.fateScrollReady = "1";
   log.dataset.fateAutoScroll = "1";
+  cleanLog(log);
   log.addEventListener("scroll", () => {
     const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight <= 4;
     log.dataset.fateAutoScroll = atBottom ? "1" : "0";
   });
   const observer = new MutationObserver(() => {
+    cleanLog(log);
     if (log.dataset.fateAutoScroll === "1") log.scrollTop = log.scrollHeight;
   });
   observer.observe(log, { childList: true, subtree: true, characterData: true });
@@ -675,6 +815,7 @@ export function installFateLayout() {
 
   const skillPanel = createPanel("fate-skill-panel", tableUi);
   createPanel("fate-skill-panel-title", skillPanel);
+  createPersistentSkills(skillPanel);
 
   const roundInfo = createPanel("fate-round-info", tableUi);
   const aliveInfo = createPanel("fate-alive-info", tableUi);
@@ -685,6 +826,7 @@ export function installFateLayout() {
   updateTableInfo(roundInfo, aliveInfo);
   enableLogScroll(ui.arenalog);
   classifyControls();
+  syncPersistentSkills(skillPanel);
 
   const controlObserver = ui.control
     ? new MutationObserver(classifyControls)
@@ -701,6 +843,7 @@ export function installFateLayout() {
     updateSelfStatus(selfStatus);
     updateTableInfo(roundInfo, aliveInfo);
     classifyControls();
+    syncPersistentSkills(skillPanel);
   }, 500);
   ui.fateLayout = { tableUi, selfStatus, equipment, skillPanel, roundInfo, aliveInfo, timer, controlObserver };
 }
