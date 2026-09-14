@@ -293,9 +293,9 @@ export const FATE_LAYOUT_STYLE = `
   .fate-standalone #arena.fate-table-layout > #me {
     left: 13.4%;
     top: auto;
-    bottom: 0;
+    bottom: 1.5%;
     width: 60%;
-    height: 20.5%;
+    height: 18.3%;
     z-index: 3;
     pointer-events: none;
   }
@@ -483,19 +483,27 @@ export const FATE_LAYOUT_STYLE = `
     font-size: 8px !important;
   }
 
-  /* Only the local player uses resource bars. Other players keep their
-     native status-mark strips in the independent narrow columns. */
+  /* Every player uses resource bars. Status skills stay in the independent
+     narrow columns; the native rage mark is hidden below. */
   .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .hp,
   .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .marks {
     display: none !important;
   }
 
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .avatar,
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .avatar2 {
+  .fate-standalone #arena.fate-table-layout > .player > .avatar,
+  .fate-standalone #arena.fate-table-layout > .player > .avatar2 {
     height: calc(100% - 46px) !important;
   }
 
-  .fate-standalone .fate-self-resources {
+  .fate-standalone #arena.fate-table-layout > .player > .hp {
+    display: none !important;
+  }
+
+  .fate-standalone .fate-rage-native-mark {
+    display: none !important;
+  }
+
+  .fate-standalone .fate-player-resources {
     position: absolute;
     left: 3px;
     right: 3px;
@@ -507,7 +515,7 @@ export const FATE_LAYOUT_STYLE = `
     pointer-events: none;
   }
 
-  .fate-standalone .fate-self-resource {
+  .fate-standalone .fate-player-resource {
     box-sizing: border-box;
     position: relative;
     display: flex;
@@ -524,7 +532,7 @@ export const FATE_LAYOUT_STYLE = `
     overflow: hidden;
   }
 
-  .fate-standalone .fate-self-resource::before {
+  .fate-standalone .fate-player-resource::before {
     content: "";
     position: absolute;
     inset: 0 auto 0 0;
@@ -533,22 +541,22 @@ export const FATE_LAYOUT_STYLE = `
     z-index: 0;
   }
 
-  .fate-standalone .fate-self-resource.fate-rage-resource {
+  .fate-standalone .fate-player-resource.fate-rage-resource {
     background: #29405f;
   }
 
-  .fate-standalone .fate-self-resource.fate-rage-resource::before {
+  .fate-standalone .fate-player-resource.fate-rage-resource::before {
     background: #4c82d7;
   }
 
-  .fate-standalone .fate-self-resource-label,
-  .fate-standalone .fate-self-resource-value {
+  .fate-standalone .fate-player-resource-label,
+  .fate-standalone .fate-player-resource-value {
     position: relative;
     z-index: 1;
     white-space: nowrap;
   }
 
-  .fate-standalone .fate-self-resource-value {
+  .fate-standalone .fate-player-resource-value {
     margin-left: auto;
   }
 
@@ -763,7 +771,9 @@ function updateSelfStatus(panel) {
   if (!game.me || !panel) return;
   const player = game.me;
   const marks = player.node?.marks;
-  const activeMarks = marks ? Math.max(0, marks.childElementCount - 1) : 0;
+  const activeMarks = marks
+    ? Math.max(0, Array.from(marks.children).filter(mark => !mark.classList.contains("fate-rage-native-mark")).length - 1)
+    : 0;
   panel.innerHTML = `
     <span class="fate-self-status-title">玩家状态</span>
     <span class="fate-self-status-empty">${activeMarks ? "" : "暂无状态"}</span>
@@ -773,20 +783,30 @@ function updateSelfStatus(panel) {
   if (marks) panel.appendChild(marks);
 }
 
-function updateSelfResources(player) {
+function hideNativeResourceMarks(player) {
+  const marks = player?.node?.marks;
+  if (!marks) return;
+  for (const mark of Array.from(marks.children)) {
+    const isRage = mark.name === "fate_rage_rule" || mark.skill === "fate_rage_rule";
+    mark.classList.toggle("fate-rage-native-mark", isRage);
+  }
+}
+
+function updatePlayerResources(player) {
   if (!player) return;
-  let resources = player.querySelector?.(".fate-self-resources");
+  hideNativeResourceMarks(player);
+  let resources = player.querySelector?.(".fate-player-resources");
   if (!resources) {
     resources = document.createElement("div");
-    resources.className = "fate-self-resources";
+    resources.className = "fate-player-resources";
     resources.innerHTML = `
-      <div class="fate-self-resource fate-health-resource">
-        <span class="fate-self-resource-label">生命</span>
-        <span class="fate-self-resource-value"></span>
+      <div class="fate-player-resource fate-health-resource">
+        <span class="fate-player-resource-label">生命</span>
+        <span class="fate-player-resource-value"></span>
       </div>
-      <div class="fate-self-resource fate-rage-resource">
-        <span class="fate-self-resource-label">怒气</span>
-        <span class="fate-self-resource-value"></span>
+      <div class="fate-player-resource fate-rage-resource">
+        <span class="fate-player-resource-label">怒气</span>
+        <span class="fate-player-resource-value"></span>
       </div>
     `;
     player.appendChild(resources);
@@ -802,7 +822,7 @@ function updateSelfResources(player) {
   for (const [selector, value, max] of rows) {
     const row = resources.querySelector(selector);
     if (!row) continue;
-    row.querySelector(".fate-self-resource-value").textContent = `${value}/${max}`;
+    row.querySelector(".fate-player-resource-value").textContent = `${value}/${max}`;
     row.style.setProperty("--fate-resource-percent", `${Math.min(100, (value / max) * 100)}%`);
   }
 }
@@ -976,8 +996,8 @@ export function installFateLayout() {
   if (ui.cardPileNumber) ui.cardPileNumber.style.display = "none";
 
   updateSeatLayout();
+  game.players.forEach(updatePlayerResources);
   updateSelfStatus(selfStatus);
-  updateSelfResources(game.me);
   updateTableInfo(roundInfo, aliveInfo);
   enableLogScroll(ui.arenalog);
   classifyControls();
@@ -995,8 +1015,8 @@ export function installFateLayout() {
       return;
     }
     updateSeatLayout();
+    game.players.forEach(updatePlayerResources);
     updateSelfStatus(selfStatus);
-    updateSelfResources(game.me);
     updateTableInfo(roundInfo, aliveInfo);
     classifyControls();
     syncPersistentSkills(skillPanel);
