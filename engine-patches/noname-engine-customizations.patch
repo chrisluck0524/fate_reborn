@@ -475,19 +475,19 @@ index 7a0a6dd..1c2c485 100644
  							title: "版权声明",
  							icon: path.join(app.getAppPath(), "app", "noname.ico"),
 diff --git a/apps/electron/build.ts b/apps/electron/build.ts
-index 1fc3251..563f83c 100644
+index 1fc32518c827d9b13ef109a8bb7bcf4a40f8fb06..cf65d786917a43ea94c7033a49498cf23c3d0aad 100644
 --- a/apps/electron/build.ts
 +++ b/apps/electron/build.ts
-@@ -5,10 +5,14 @@ async function main(targets: PackagerOptions["targets"], config: Partial<Configu
+@@ -5,15 +5,18 @@
  	const appPaths = await buildElectron({
  		config: {
  			asar: false,
+-			appId: "com.libnoname.noname",
+-			productName: "noname",
 +			// Dependencies are already bundled into the Electron and core builds.
 +			// Returning false marks node_modules as externally handled and avoids
 +			// treating the workspace link for @noname/fs as a production package.
 +			beforeBuild: async () => false,
--			appId: "com.libnoname.noname",
--			productName: "noname",
 +			appId: "org.fatereborn.demo",
 +			productName: "宿命Reborn试玩版",
  			directories: {
@@ -496,7 +496,12 @@ index 1fc3251..563f83c 100644
  			},
  			files: [
  				{ from: "dist", to: "" },
-@@ -45,7 +45,7 @@ switch (process.argv[2]) {
+ 				{ from: "../../dist", to: "" },
+-				{ from: "../../dist/node_modules", to: "node_modules" },
+ 				"package.json",
+ 			],
+ 			extraMetadata: {
+@@ -45,7 +48,7 @@
  		main(Platform.LINUX.createTarget("AppImage", Arch.x64));
  		break;
  	case "macos":
