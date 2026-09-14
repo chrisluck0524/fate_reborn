@@ -295,7 +295,7 @@ export const FATE_LAYOUT_STYLE = `
     top: auto;
     bottom: 0;
     width: 60%;
-    height: 19.7%;
+    height: 20.5%;
     z-index: 3;
     pointer-events: none;
   }
@@ -307,7 +307,8 @@ export const FATE_LAYOUT_STYLE = `
     top: 0;
     width: 100%;
     height: 100%;
-    padding: 4px 8px;
+    padding: 4px 8px 2px;
+    display: block !important;
     overflow-x: auto;
     overflow-y: hidden;
     pointer-events: auto;
@@ -315,7 +316,38 @@ export const FATE_LAYOUT_STYLE = `
 
   .fate-standalone #arena.fate-table-layout > #handcards1 > div,
   .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div {
-    height: 100%;
+    box-sizing: border-box;
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(2px, .35vw, 6px);
+    width: max-content !important;
+    min-width: 100% !important;
+    height: 100% !important;
+    position: relative !important;
+    left: 0 !important;
+    top: 0 !important;
+    transform: none !important;
+  }
+
+  .fate-standalone #arena.fate-table-layout > #handcards1 > div > .card,
+  .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div > .card {
+    box-sizing: border-box;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    flex: 0 0 auto;
+    width: clamp(78px, 7vw, 126px) !important;
+    height: calc(100% - 8px) !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  .fate-standalone #arena.fate-table-layout > #handcards1 > div > .card.selected,
+  .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div > .card.selected {
+    transform: translateY(-18px) !important;
   }
 
   .fate-standalone #arena.fate-table-layout > .player {
@@ -334,6 +366,7 @@ export const FATE_LAYOUT_STYLE = `
     top: 79.8% !important;
     width: 12.1% !important;
     height: 18.3% !important;
+    overflow: visible;
   }
 
   .fate-standalone #arena.fate-table-layout > .player > .avatar,
@@ -362,6 +395,24 @@ export const FATE_LAYOUT_STYLE = `
     text-overflow: ellipsis;
     font-size: clamp(11px, 1vw, 16px);
     text-shadow: 0 1px 2px #000;
+  }
+
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .name,
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .name2 {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    left: 5px !important;
+    right: auto !important;
+    top: 4px !important;
+    width: auto !important;
+    max-width: calc(100% - 10px);
+    height: 22px !important;
+    line-height: 22px !important;
+    text-align: left;
+    writing-mode: horizontal-tb !important;
+    -webkit-writing-mode: horizontal-tb !important;
+    z-index: 7;
   }
 
   .fate-standalone #arena.fate-table-layout > .player > .identity {
@@ -430,6 +481,75 @@ export const FATE_LAYOUT_STYLE = `
     height: 10px !important;
     line-height: 10px !important;
     font-size: 8px !important;
+  }
+
+  /* Only the local player uses resource bars. Other players keep their
+     native status-mark strips in the independent narrow columns. */
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .hp,
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .marks {
+    display: none !important;
+  }
+
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .avatar,
+  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .avatar2 {
+    height: calc(100% - 46px) !important;
+  }
+
+  .fate-standalone .fate-self-resources {
+    position: absolute;
+    left: 3px;
+    right: 3px;
+    bottom: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  .fate-standalone .fate-self-resource {
+    box-sizing: border-box;
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 21px;
+    min-height: 21px;
+    padding: 0 5px;
+    border: 1px solid #202020;
+    background: #29405f;
+    color: #fff;
+    font-size: clamp(10px, .84vw, 14px);
+    line-height: 19px;
+    text-shadow: 0 1px 1px #222;
+    overflow: hidden;
+  }
+
+  .fate-standalone .fate-self-resource::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--fate-resource-percent, 0%);
+    background: #3f9d49;
+    z-index: 0;
+  }
+
+  .fate-standalone .fate-self-resource.fate-rage-resource {
+    background: #29405f;
+  }
+
+  .fate-standalone .fate-self-resource.fate-rage-resource::before {
+    background: #4c82d7;
+  }
+
+  .fate-standalone .fate-self-resource-label,
+  .fate-standalone .fate-self-resource-value {
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+  }
+
+  .fate-standalone .fate-self-resource-value {
+    margin-left: auto;
   }
 
   .fate-standalone #arena.fate-table-layout > .player.fate-seat-top-left { left: 20.1% !important; top: 3.5% !important; }
@@ -541,8 +661,8 @@ export const FATE_LAYOUT_STYLE = `
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-confirm-control,
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
     position: absolute !important;
-    left: 18.4% !important;
-    bottom: 21.2% !important;
+    left: 13.4% !important;
+    bottom: 20.7% !important;
     transform: none !important;
     min-width: 82px;
     padding: 4px 7px;
@@ -550,16 +670,16 @@ export const FATE_LAYOUT_STYLE = `
   }
 
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
-    left: 55% !important;
+    left: 68.5% !important;
   }
 
   .fate-standalone #arena.fate-table-layout > .dialog {
     box-sizing: border-box;
-    left: 18.4% !important;
-    bottom: 22.8% !important;
+    left: 13.4% !important;
+    bottom: 20.7% !important;
     top: auto !important;
-    width: 47.8% !important;
-    max-height: 15%;
+    width: 60% !important;
+    max-height: 8%;
     min-height: 0;
     border: 2px solid #171717;
     background: #969696;
@@ -651,6 +771,40 @@ function updateSelfStatus(panel) {
   // The status text is refreshed as cards and rage change. Reattach the native
   // mark strip after replacing that text so self buffs remain visible here.
   if (marks) panel.appendChild(marks);
+}
+
+function updateSelfResources(player) {
+  if (!player) return;
+  let resources = player.querySelector?.(".fate-self-resources");
+  if (!resources) {
+    resources = document.createElement("div");
+    resources.className = "fate-self-resources";
+    resources.innerHTML = `
+      <div class="fate-self-resource fate-health-resource">
+        <span class="fate-self-resource-label">生命</span>
+        <span class="fate-self-resource-value"></span>
+      </div>
+      <div class="fate-self-resource fate-rage-resource">
+        <span class="fate-self-resource-label">怒气</span>
+        <span class="fate-self-resource-value"></span>
+      </div>
+    `;
+    player.appendChild(resources);
+  }
+  const hp = Math.max(0, Number(player.hp) || 0);
+  const maxHp = Math.max(1, Number(player.maxHp) || hp || 1);
+  const rage = Math.max(0, Number(player.countMark?.("fate_rage_rule")) || 0);
+  const maxRage = 3;
+  const rows = [
+    [".fate-health-resource", hp, maxHp],
+    [".fate-rage-resource", rage, maxRage],
+  ];
+  for (const [selector, value, max] of rows) {
+    const row = resources.querySelector(selector);
+    if (!row) continue;
+    row.querySelector(".fate-self-resource-value").textContent = `${value}/${max}`;
+    row.style.setProperty("--fate-resource-percent", `${Math.min(100, (value / max) * 100)}%`);
+  }
 }
 
 function getPermanentSkills() {
@@ -823,6 +977,7 @@ export function installFateLayout() {
 
   updateSeatLayout();
   updateSelfStatus(selfStatus);
+  updateSelfResources(game.me);
   updateTableInfo(roundInfo, aliveInfo);
   enableLogScroll(ui.arenalog);
   classifyControls();
@@ -841,6 +996,7 @@ export function installFateLayout() {
     }
     updateSeatLayout();
     updateSelfStatus(selfStatus);
+    updateSelfResources(game.me);
     updateTableInfo(roundInfo, aliveInfo);
     classifyControls();
     syncPersistentSkills(skillPanel);
