@@ -10,6 +10,7 @@ import {
   S_RAGE_COST,
   dealFivePlayerIdentities,
   dealPlayerIdentities,
+  evaluateNeutralFate,
   evaluateWinner,
   gainRage,
   requiredDodges,
@@ -46,13 +47,17 @@ test("五人身份固定为2近卫、2天灾、1中立", () => {
   assert.equal(identities.filter(value => value === FACTION.NEUTRAL).length, 1);
 });
 
-test("六至八人局自动补充AI阵营且始终只有一名中立", () => {
-  for (const count of [6, 7, 8]) {
+test("六至七人局保持一名中立，八人局使用3/3/2身份配比", () => {
+  for (const count of [6, 7]) {
     const identities = dealPlayerIdentities(count, () => 0.42);
     assert.equal(identities.length, count);
     assert.equal(identities.filter(value => value === FACTION.NEUTRAL).length, 1);
     assert.equal(identities.filter(value => value === FACTION.SENTINEL).length + identities.filter(value => value === FACTION.SCOURGE).length, count - 1);
   }
+  const identities = dealPlayerIdentities(8, () => 0.42);
+  assert.equal(identities.filter(value => value === FACTION.SENTINEL).length, 3);
+  assert.equal(identities.filter(value => value === FACTION.SCOURGE).length, 3);
+  assert.equal(identities.filter(value => value === FACTION.NEUTRAL).length, 2);
 });
 
 test("怒气按实际伤害增加且不超过上限", () => {
@@ -104,6 +109,25 @@ test("中立宿命优先于阵营胜利", () => {
     kind: "neutral",
     winners: ["a"],
   });
+});
+
+test("反噬的傀儡在固定下家阵营获胜时替代其获胜", () => {
+  const players = [
+    { id: "neutral", identity: FACTION.NEUTRAL, alive: true, successorId: "successor", rage: 1 },
+    { id: "successor", identity: FACTION.SENTINEL, alive: true, rage: 1 },
+    { id: "scourge", identity: FACTION.SCOURGE, alive: false, rage: 1 },
+  ];
+  assert.equal(evaluateNeutralFate("backlash_puppet", players[0], players), true);
+  assert.deepEqual(evaluateWinner({ players, fateId: "backlash_puppet", turnPlayerId: "successor" }), {
+    kind: "neutral",
+    winners: ["neutral"],
+  });
+});
+
+test("蔓延的瘟疫未建立邻座信息时不应误判胜利", () => {
+  const neutral = { id: "neutral", identity: FACTION.NEUTRAL, alive: true };
+  const players = [neutral, { id: "sentinel", identity: FACTION.SENTINEL, alive: true }];
+  assert.equal(evaluateNeutralFate("spreading_plague", neutral, players), false);
 });
 
 test("Roshan死亡立即让其他存活角色获胜", () => {

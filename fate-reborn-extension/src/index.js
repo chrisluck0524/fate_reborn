@@ -95,6 +95,29 @@ async function chooseStandardAiHero(player, label, pool) {
   return result.links?.[0] || choices[0];
 }
 
+async function activateRoshan(player) {
+  if (
+    !player?.isAlive?.() ||
+    player.identity !== FACTION.NEUTRAL ||
+    game.fateReborn?.fate?.id !== "roshan" ||
+    player.storage.fate_roshan_revealed
+  ) return false;
+
+  player.storage.fate_roshan_revealed = true;
+  player.storage.fate_roshan_resolving = true;
+  game.fateReborn.roshanPlayerId = player.playerid;
+  game.log(player, "公开了", "#yRoshan附体");
+  try {
+    for (const target of game.players.slice()) {
+      if (target !== player && target.isAlive()) await target.die(player);
+    }
+  } finally {
+    delete player.storage.fate_roshan_resolving;
+  }
+  game.checkResult?.();
+  return true;
+}
+
 const HERO_NAMES = {
   fate_abaddon: "亚巴顿",
   fate_skeleton_king: "骷髅王",
@@ -137,6 +160,7 @@ function playerState(player) {
     hp: player.hp,
     rage: player.countMark("fate_rage_rule"),
     neighbors: player.storage.fate_neighbors || [],
+    successorId: player.storage.fate_successor || player.storage.fate_neighbors?.[1],
     roshanRevealed: Boolean(player.storage.fate_roshan_revealed),
   };
 }
@@ -234,9 +258,9 @@ function createMode(testing = false) {
 
         for (const neutral of game.players.filter(player => player.identity === FACTION.NEUTRAL)) {
           neutral.storage.fate_neighbors = [neutral.previous.playerid, neutral.next.playerid];
+          neutral.storage.fate_successor = neutral.next.playerid;
         }
-        const playableFates = FATES.filter(fate => !["backlash_puppet", "roshan"].includes(fate.id));
-        let fate = playableFates.randomGet();
+        let fate = FATES.randomGet();
         if (isTesting) {
           const fateResult = await game.me.chooseControl(...FATES.map(item => item.name)).set("prompt", "测试对局：选择宿命任务").forResult();
           fate = FATES.find(current => current.name === fateResult.control) || FATES[0];
@@ -253,8 +277,12 @@ function createMode(testing = false) {
         game.me.node.identity.classList.remove("guessing");
         knownNext.setIdentity(knownNext.identity);
         knownNext.node.identity.classList.remove("guessing");
+        const visibleRoshan = [game.me, knownNext].find(player => player.identity === FACTION.NEUTRAL && player.isAlive());
+        if (visibleRoshan) game.fateReborn.pendingRoshanId = visibleRoshan.playerid;
         if (isTesting) {
           game.showIdentity();
+          const testRoshan = game.players.find(player => player.identity === FACTION.NEUTRAL && player.isAlive());
+          if (testRoshan) game.fateReborn.pendingRoshanId = testRoshan.playerid;
           game.log("#y测试对局：胜负检查已关闭，可自由验证技能。");
         }
         if (game.me.identity === FACTION.NEUTRAL) {
@@ -296,6 +324,9 @@ function createMode(testing = false) {
             if (setup.rage) player.addMark("fate_rage_rule", setup.rage);
           }
         }
+        const pendingRoshan = game.players.find(player => player.playerid === game.fateReborn.pendingRoshanId);
+        if (pendingRoshan) await activateRoshan(pendingRoshan);
+        delete game.fateReborn.pendingRoshanId;
         await game.phaseLoop(game.fateReborn.firstPlayer || game.players.randomGet());
       },
     ],
@@ -343,7 +374,7 @@ function createMode(testing = false) {
           if (this.identity === FACTION.NEUTRAL && this.storage.fate_roshan_revealed) game.checkResult();
         },
         async dieAfter2(source) {
-          if (source && source !== this) {
+          if (source && source !== this && !source.storage?.fate_roshan_resolving) {
             const result = await source
               .chooseControl("摸两张牌", "查看身份")
               .set("prompt", "请选择击杀奖励")
@@ -351,8 +382,14 @@ function createMode(testing = false) {
               .forResult();
             const choice = result.control || "摸两张牌";
             if (choice === "查看身份") {
-              const candidates = game.players.filter(player => !player.identityShown);
-              const target = candidates.randomGet();
+              const candidates = game.players.filter(player => player !== source && player.isAlive());
+              const targetResult = candidates.length
+                ? await source
+                  .chooseTarget("请选择查看身份的存活角色", true, (card, chooser, target) => target !== chooser && target.isAlive())
+                  .set("ai", target => target.identityShown ? 0 : 1)
+                  .forResult()
+                : null;
+              const target = targetResult?.targets?.[0];
               if (target) {
                 source.storage.fate_known_identities ||= {};
                 source.storage.fate_known_identities[target.playerid] = target.identity;
@@ -430,7 +467,7 @@ function createMode(testing = false) {
     },
     translate: {
       fate_reborn: "宿命",
-      fate_reborn_info: "五人标准局：2近卫、2天灾、1中立。",
+      fate_reborn_info: "5—8人标准局：5人时2近卫、2天灾、1中立；8人时3近卫、3天灾、2中立。",
       fate_reborn_test: "宿命测试",
       fate_reborn_test_info: "选择英雄、身份、血量、怒气与起始手牌，胜负检查关闭。",
       fate_cast_phase: "施法阶段",
@@ -539,7 +576,7 @@ export default function fateRebornExtension() {
     },
     config: {},
     help: {
-      "宿命 Reborn": "当前版本接入五人身份、27名英雄基础属性、怒气、固定手牌上限、施法阶段、112张实体牌和宿命胜负骨架。",
+      "宿命 Reborn": "当前版本接入5—8人身份、27名英雄技能、怒气、固定手牌上限、施法阶段、112张实体牌和宿命胜负判定。",
     },
     package: {
       character: { character: HEROES, translate: { ...HERO_NAMES, fate_character_config: "宿命英雄" } },
@@ -598,7 +635,7 @@ export default function fateRebornExtension() {
           fate_hand_limit_rule_info: "手牌上限由英雄牌固定为4或5。",
         },
       },
-      intro: "宿命 Reborn 五人身份对战试玩版。",
+      intro: "宿命 Reborn 5—8人身份对战试玩版。",
       author: "宿命 Reborn",
       diskURL: "",
       forumURL: "",

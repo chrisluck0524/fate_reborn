@@ -130,12 +130,19 @@ export function dealFivePlayerIdentities(random = Math.random) {
 
 export function dealPlayerIdentities(playerCount = 5, random = Math.random) {
   const total = Math.max(5, Math.min(8, Number(playerCount) || 5));
-  const sentinels = Math.floor((total - 1) / 2);
-  const scourges = total - 1 - sentinels;
+  // The eight-card identity pool contains three Sentinel, three Scourge and
+  // two Neutral cards.  The five-player standard setup remains the fixed
+  // 2/2/1 distribution; the second Neutral enters only in the full eight-
+  // player setup so six- and seven-player games retain their existing
+  // 2/3/1 and 3/3/1 distributions.
+  const neutrals = total === 8 ? 2 : 1;
+  const nonNeutral = total - neutrals;
+  const sentinels = Math.floor(nonNeutral / 2);
+  const scourges = nonNeutral - sentinels;
   return shuffled([
     ...Array(sentinels).fill(FACTION.SENTINEL),
     ...Array(scourges).fill(FACTION.SCOURGE),
-    FACTION.NEUTRAL,
+    ...Array(neutrals).fill(FACTION.NEUTRAL),
   ], random);
 }
 
@@ -172,10 +179,20 @@ export function evaluateNeutralFate(fateId, neutral, players) {
       return !alive.some(player => player.identity === FACTION.SCOURGE);
     case "holy_conqueror":
       return !alive.some(player => player.identity === FACTION.SENTINEL);
-    case "spreading_plague":
-      return players.filter(player => neutral.neighbors?.includes(player.id)).every(player => !player.alive);
+    case "spreading_plague": {
+      const neighbors = neutral.neighbors || [];
+      return neighbors.length > 0 && players.filter(player => neighbors.includes(player.id)).every(player => !player.alive);
+    }
     case "fate_gamble":
       return alive.length === 3 && new Set(alive.map(player => player.identity)).size === 3;
+    case "backlash_puppet": {
+      const successorId = neutral.successorId || neutral.successor || neutral.neighbors?.[1];
+      const successor = players.find(player => player.id === successorId);
+      if (!successor) return false;
+      if (successor.identity === FACTION.SENTINEL) return !alive.some(player => player.identity === FACTION.SCOURGE);
+      if (successor.identity === FACTION.SCOURGE) return !alive.some(player => player.identity === FACTION.SENTINEL);
+      return false;
+    }
     case "death_caller":
       return alive.filter(player => player.id !== neutral.id).every(player => player.hp <= 2);
     case "paranoid_mathematician":
