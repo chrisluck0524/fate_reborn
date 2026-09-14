@@ -6,6 +6,11 @@ const trick = (filterTarget, content) => ({ type: "trick", enable: false, wuxiea
 const other = (card, player, target) => player !== target;
 const hand = player => player.countCards("h") > 0;
 const hostileTarget = (target, player) => get.damageEffect(target, player, player);
+const queueStatus = (target, skills) => {
+  if (!target || !game.fateReborn) return;
+  game.fateReborn.pendingStatuses ||= [];
+  game.fateReborn.pendingStatuses.push({ targetId: target.playerid, skills });
+};
 const MAGIC_NAMES = new Set(MAGIC_DECK.map(card => card[2]));
 const discard = async (player, count, prompt, filterCard = () => true) =>
   player.chooseToDiscard("h", count, true).set("prompt", prompt).set("filterCard", filterCard).forResult();
@@ -71,9 +76,9 @@ export const INTELLIGENCE_HERO_CARDS = {
   fate_lich_feast_effect: trick(() => true, async (event, trigger, player) => { await player.draw(2); }),
   fate_shadow_wave_effect: trick(other, async (event, trigger, player) => { await event.target.damage({ num: 1, source: player }); }),
   fate_keeper_wave_effect: trick(other, async (event, trigger, player) => { await event.target.damage({ num: 1, source: player }); }),
-  fate_heartstopper_effect_card: trick(other, async event => { event.target.addTempSkill("fate_heartstopper_effect", { global: "phaseAfter" }); }),
-  fate_crystal_frost_effect_card: trick(other, async event => { event.target.addTempSkill("fate_crystal_frost_effect", { global: "phaseAfter" }); event.target.addTempSkill("fate_crystal_frost_attack", { global: "phaseAfter" }); }),
-  fate_shallow_grave_effect_card: trick(() => true, async event => { event.target.addTempSkill("fate_shallow_grave", { global: "phaseAfter" }); }),
+  fate_heartstopper_effect_card: trick(other, async event => { queueStatus(event.target, ["fate_heartstopper_effect"]); }),
+  fate_crystal_frost_effect_card: trick(other, async event => { queueStatus(event.target, ["fate_crystal_frost_effect", "fate_crystal_frost_attack"]); }),
+  fate_shallow_grave_effect_card: trick(() => true, async event => { queueStatus(event.target, ["fate_shallow_grave"]); }),
 };
 
 export const INTELLIGENCE_HERO_SKILLS = {

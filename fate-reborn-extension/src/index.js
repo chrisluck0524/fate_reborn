@@ -430,6 +430,19 @@ function createMode(testing = false) {
             await current.trigger(current.name);
           });
           await castEvent;
+          game.log("进入", trigger.player, "回合前的", "#y状态判定阶段");
+          const statusEvent = game.createEvent("fateStatusPhase", false, event);
+          statusEvent.player = trigger.player;
+          statusEvent.setContent(async current => {
+            await current.trigger(current.name);
+            const pending = game.fateReborn?.pendingStatuses?.splice(0) || [];
+            for (const status of pending) {
+              const target = game.players.concat(game.dead).find(player => player.playerid === status.targetId);
+              if (!target?.isAlive()) continue;
+              for (const skill of status.skills || []) target.addTempSkill(skill, { global: "phaseAfter" });
+            }
+          });
+          await statusEvent;
         },
       },
       fate_settled_victory_check: {
