@@ -295,19 +295,22 @@ export const FATE_LAYOUT_STYLE = `
     top: auto;
     bottom: 1.5%;
     width: 60%;
-    height: 18.3%;
+    /* Keep the hand strip on the same baseline as the equipment and skill
+       panels.  The old 18.3% height made its top edge sit visibly higher. */
+    height: 16.8%;
     z-index: 3;
     pointer-events: none;
+    overflow: visible;
   }
 
   .fate-standalone #arena.fate-table-layout > #handcards1,
   .fate-standalone #arena.fate-table-layout > #me > #handcards1 {
     box-sizing: border-box;
     left: 0;
-    top: 0;
+    top: 16px;
     width: 100%;
     height: 100%;
-    padding: 4px 8px 2px;
+    padding: 0 8px;
     display: block !important;
     overflow-x: auto;
     overflow-y: hidden;
@@ -327,6 +330,8 @@ export const FATE_LAYOUT_STYLE = `
     position: relative !important;
     left: 0 !important;
     top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     transform: none !important;
   }
 
@@ -340,7 +345,7 @@ export const FATE_LAYOUT_STYLE = `
     bottom: auto !important;
     flex: 0 0 auto;
     width: clamp(78px, 7vw, 126px) !important;
-    height: calc(100% - 8px) !important;
+    height: calc(100% - 4px) !important;
     margin: 0 !important;
     transform: none !important;
   }
@@ -488,11 +493,6 @@ export const FATE_LAYOUT_STYLE = `
   .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .hp,
   .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .marks {
     display: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .avatar,
-  .fate-standalone #arena.fate-table-layout > .player > .avatar2 {
-    height: calc(100% - 46px) !important;
   }
 
   .fate-standalone #arena.fate-table-layout > .player > .hp {
@@ -669,8 +669,9 @@ export const FATE_LAYOUT_STYLE = `
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-confirm-control,
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
     position: absolute !important;
-    left: 13.4% !important;
-    bottom: 20.7% !important;
+    left: 33.5% !important;
+    top: 64.5% !important;
+    bottom: auto !important;
     transform: none !important;
     min-width: 82px;
     padding: 4px 7px;
@@ -678,22 +679,22 @@ export const FATE_LAYOUT_STYLE = `
   }
 
   .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
-    left: 68.5% !important;
+    left: 52.5% !important;
   }
 
   .fate-standalone #arena.fate-table-layout > .dialog {
     box-sizing: border-box;
-    left: 13.4% !important;
-    bottom: 20.7% !important;
-    top: auto !important;
-    width: 60% !important;
+    left: 18.4% !important;
+    top: 52.5% !important;
+    bottom: auto !important;
+    width: 47.8% !important;
     max-height: 8%;
     min-height: 0;
     border: 2px solid #171717;
     background: #969696;
     color: #f5f5f5;
     overflow-y: auto;
-    z-index: 11;
+    z-index: 19;
   }
 
   .fate-standalone #arena.fate-table-layout > .dialog .caption,
