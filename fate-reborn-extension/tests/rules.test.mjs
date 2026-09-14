@@ -124,6 +124,23 @@ test("反噬的傀儡在固定下家阵营获胜时替代其获胜", () => {
   });
 });
 
+test("宿命结算按当前回合角色逆时针遍历座位", () => {
+  const players = [
+    { id: "p1", seat: 1, identity: FACTION.NEUTRAL, alive: true, successorId: "p1", rage: 1 },
+    { id: "p2", seat: 2, identity: FACTION.NEUTRAL, alive: true, successorId: "sentinel", rage: 1 },
+    { id: "p3", seat: 3, identity: FACTION.NEUTRAL, alive: true, successorId: "sentinel", rage: 1 },
+    { id: "sentinel", seat: 4, identity: FACTION.SENTINEL, alive: true, rage: 1 },
+  ];
+  assert.deepEqual(evaluateWinner({ players, fateId: "backlash_puppet", turnPlayerId: "p1", turnDirection: "counterclockwise" }), {
+    kind: "neutral",
+    winners: ["p3"],
+  });
+  assert.deepEqual(evaluateWinner({ players, fateId: "backlash_puppet", turnPlayerId: "p1", turnDirection: "clockwise" }), {
+    kind: "neutral",
+    winners: ["p2"],
+  });
+});
+
 test("蔓延的瘟疫未建立邻座信息时不应误判胜利", () => {
   const neutral = { id: "neutral", identity: FACTION.NEUTRAL, alive: true };
   const players = [neutral, { id: "sentinel", identity: FACTION.SENTINEL, alive: true }];

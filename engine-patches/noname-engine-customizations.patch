@@ -202,6 +202,21 @@ diff --git a/apps/core/noname/library/element/content.ts b/apps/core/noname/libr
 index 0d03296..bd0dd5f 100644
 --- a/apps/core/noname/library/element/content.ts
 +++ b/apps/core/noname/library/element/content.ts
+@@ -3807,8 +3807,14 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 					.concat(game.dead)
+ 					.sort((a, b) => parseInt(a.dataset.position) - parseInt(b.dataset.position));
+ 				const position = parseInt(current.dataset.position);
++				if (game.fateReborn?.turnDirection === "counterclockwise") {
++					for (let index = players.length - 1; index >= 0; index--) {
++						if (parseInt(players[index].dataset.position) < position) return players[index];
++					}
++					return players[players.length - 1];
++				}
+ 				for (const player of players) {
+ 					if (parseInt(player.dataset.position) > position) {
+ 						return player;
+ 					}
+ 				}
 @@ -7332,10 +7332,12 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
  			for (const skill of list) {
  				if (lib.translate[`${skill}_info`]) {

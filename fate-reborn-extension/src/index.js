@@ -153,6 +153,7 @@ for (const [heroId, hero] of Object.entries(HEROES)) {
 }
 
 function playerState(player) {
+  const seat = player.getSeatNum?.();
   return {
     id: player.playerid,
     identity: player.identity,
@@ -162,6 +163,7 @@ function playerState(player) {
     neighbors: player.storage.fate_neighbors || [],
     successorId: player.storage.fate_successor || player.storage.fate_neighbors?.[1],
     roshanRevealed: Boolean(player.storage.fate_roshan_revealed),
+    seat: Number.isFinite(seat) && seat > 0 ? seat : undefined,
   };
 }
 
@@ -258,7 +260,9 @@ function createMode(testing = false) {
 
         for (const neutral of game.players.filter(player => player.identity === FACTION.NEUTRAL)) {
           neutral.storage.fate_neighbors = [neutral.previous.playerid, neutral.next.playerid];
-          neutral.storage.fate_successor = neutral.next.playerid;
+          // The Fate rules advance turns counterclockwise, so a neutral's
+          // fixed-seat successor is the engine's previous seat.
+          neutral.storage.fate_successor = neutral.previous.playerid;
         }
         let fate = FATES.randomGet();
         if (isTesting) {
@@ -267,12 +271,13 @@ function createMode(testing = false) {
         }
         game.fateReborn = {
           fate,
+          turnDirection: "counterclockwise",
           openingPlayers: game.players.map(player => player.playerid),
           testing: isTesting,
           testSetup,
         };
 
-        const knownNext = game.me.next;
+        const knownNext = game.me.previous;
         game.me.setIdentity(game.me.identity);
         game.me.node.identity.classList.remove("guessing");
         knownNext.setIdentity(knownNext.identity);
@@ -345,6 +350,7 @@ function createMode(testing = false) {
           players: allPlayers.map(playerState),
           fateId: game.fateReborn.fate.id,
           turnPlayerId: _status.currentPhase?.playerid || allPlayers[0]?.playerid,
+          turnDirection: game.fateReborn.turnDirection,
         });
         if (!result) return;
         const me = game.me._trueMe || game.me;

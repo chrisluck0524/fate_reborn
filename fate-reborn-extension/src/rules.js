@@ -204,16 +204,24 @@ export function evaluateNeutralFate(fateId, neutral, players) {
   }
 }
 
-export function evaluateWinner({ players, fateId, turnPlayerId }) {
+export function evaluateWinner({ players, fateId, turnPlayerId, turnDirection = "clockwise" }) {
   const alive = players.filter(player => player.alive);
   const revealedRoshan = players.find(player => player.identity === FACTION.NEUTRAL && player.roshanRevealed);
   if (revealedRoshan && !revealedRoshan.alive) {
     return { kind: "roshan_defeated", winners: alive.map(player => player.id) };
   }
 
-  const start = Math.max(0, players.findIndex(player => player.id === turnPlayerId));
-  const counterClockwise = Array.from({ length: players.length }, (_, offset) => players[(start + offset) % players.length]);
-  const neutralWinner = counterClockwise.find(player =>
+  const seats = players.some(player => Number.isFinite(player.seat));
+  const ordered = seats
+    ? players.slice().sort((a, b) => (a.seat ?? Number.MAX_SAFE_INTEGER) - (b.seat ?? Number.MAX_SAFE_INTEGER))
+    : players.slice();
+  const start = Math.max(0, ordered.findIndex(player => player.id === turnPlayerId));
+  const step = turnDirection === "counterclockwise" ? -1 : 1;
+  const resolutionOrder = Array.from(
+    { length: ordered.length },
+    (_, offset) => ordered[(start + step * offset + ordered.length) % ordered.length],
+  );
+  const neutralWinner = resolutionOrder.find(player =>
     player.identity === FACTION.NEUTRAL && evaluateNeutralFate(fateId, player, players),
   );
   if (neutralWinner) return { kind: "neutral", winners: [neutralWinner.id] };
