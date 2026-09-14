@@ -478,10 +478,14 @@ diff --git a/apps/electron/build.ts b/apps/electron/build.ts
 index 1fc3251..563f83c 100644
 --- a/apps/electron/build.ts
 +++ b/apps/electron/build.ts
-@@ -5,10 +5,10 @@ async function main(targets: PackagerOptions["targets"], config: Partial<Configu
+@@ -5,10 +5,14 @@ async function main(targets: PackagerOptions["targets"], config: Partial<Configu
  	const appPaths = await buildElectron({
  		config: {
  			asar: false,
++			// Dependencies are already bundled into the Electron and core builds.
++			// Returning false marks node_modules as externally handled and avoids
++			// treating the workspace link for @noname/fs as a production package.
++			beforeBuild: async () => false,
 -			appId: "com.libnoname.noname",
 -			productName: "noname",
 +			appId: "org.fatereborn.demo",
