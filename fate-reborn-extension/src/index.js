@@ -430,7 +430,6 @@ function createMode(testing = false) {
             await current.trigger(current.name);
           });
           await castEvent;
-          game.log("进入", trigger.player, "回合前的", "#y状态判定阶段");
           const statusEvent = game.createEvent("fateStatusPhase", false, event);
           statusEvent.player = trigger.player;
           statusEvent.setContent(async current => {
