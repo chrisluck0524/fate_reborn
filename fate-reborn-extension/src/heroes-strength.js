@@ -418,7 +418,7 @@ export const STRENGTH_HERO_TRANSLATIONS = {
   fate_guard: "援护",
   fate_guard_info: "其他角色受到伤害前，可弃1张手牌替其承受该伤害。效果可被驱散。",
   fate_faith: "信仰",
-  fate_faith_info: "每受到1点伤害，将牌堆顶1张牌暗置为“信仰”；出牌阶段开始时收入手牌。",
+  fate_faith_info: "每受到1点伤害，可将牌堆顶1张牌暗置为“信仰”；出牌阶段开始时收入手牌。",
   fate_fatherly_love: "父爱",
   fate_fatherly_love_info: "摸牌阶段，可将任意张“信仰”牌交给其他角色；每分配2张，你回复1点血。",
   fate_death_coil_effect: "死亡缠绕",

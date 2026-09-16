@@ -40,7 +40,7 @@ test("完整牌堆包含112张实体牌", () => {
   assert.equal(ACTIVE_DECK.filter(card => card[2] === "wuxie").length, 7);
 });
 
-test("五人身份固定为2近卫、2天灾、1中立", () => {
+test("五人身份固定为2天辉、2夜魇、1中立", () => {
   const identities = dealFivePlayerIdentities(() => 0.42);
   assert.equal(identities.filter(value => value === FACTION.SENTINEL).length, 2);
   assert.equal(identities.filter(value => value === FACTION.SCOURGE).length, 2);

@@ -1,509 +1,21 @@
-import { game, get, lib, ui } from "noname";
+import { game, lib, ui, get, _status } from "noname";
+import { hudSeats, hudSelfSeat } from "./hud-geometry.js";
+import { isFateResponse, isFatePhaseUse, isFateInteraction, canConfirmInteraction, canCancelInteraction, shouldShowNativeConfirmation } from "./response-ui.js";
 
 /**
- * Gray-box table layout for the standalone Fate client.
+ * Fate Reborn table HUD; native engine handlers still own game interactions.
  *
- * The layout deliberately uses percentages and named seat slots so the same
- * structure survives window resizing and 5-8 player games. Artwork can be
- * added later without changing the engine-facing DOM.
+ * Existing card and portrait assets are retained. Skill and status artwork
+ * can replace the reserved square placeholders later.
  */
 export const FATE_LAYOUT_STYLE = `
-  .fate-standalone #arena.fate-table-layout {
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-    background: #7f7f7f;
-    overflow: hidden;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-  }
-
-  .fate-standalone .fate-playfield,
-  .fate-standalone .fate-self-status,
-  .fate-standalone .fate-equipment,
-  .fate-standalone .fate-skill-panel,
-  .fate-standalone .fate-round-info,
-  .fate-standalone .fate-alive-info {
-    box-sizing: border-box;
-    border: 2px solid #171717;
-    background: #969696;
-    color: #f5f5f5;
-    font-weight: 700;
-    text-shadow: 0 1px 1px #333;
-  }
-
-  .fate-standalone .fate-playfield {
-    left: 18.4%;
-    top: 30.8%;
-    width: 47.8%;
-    height: 42.2%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(18px, 1.7vw, 30px);
-  }
-
-  .fate-standalone .fate-playfield::before {
-    content: "出牌区";
-  }
-
-  .fate-standalone .fate-self-status {
-    left: 1.3%;
-    top: 70.3%;
-    width: 12.1%;
-    height: 8.5%;
-    padding: 4px 5px;
-    overflow: hidden;
-    font-size: clamp(11px, 1vw, 16px);
-  }
-
-  .fate-standalone .fate-self-status-title {
-    display: block;
-    height: 16px;
-    line-height: 16px;
-    margin-bottom: 2px;
-    font-size: .95em;
-  }
-
-  .fate-standalone .fate-self-status-row {
-    display: inline-block;
-    width: 49%;
-    line-height: 1.25;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: top;
-    font-size: .78em;
-  }
-
-  .fate-standalone .fate-self-status > .marks {
-    position: absolute !important;
-    top: 4px !important;
-    right: 3px !important;
-    width: 27px !important;
-    min-height: 27px;
-    max-height: calc(100% - 8px);
-    padding: 1px !important;
-    border: 1px solid #282828;
-    background: rgba(95, 95, 95, .9);
-    overflow-y: auto;
-    z-index: 2;
-  }
-
-  .fate-standalone .fate-self-status > .marks > div {
-    position: relative !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 23px !important;
-    height: 23px !important;
-    margin: 1px !important;
-    transform: none !important;
-    opacity: 1 !important;
-  }
-
-  .fate-standalone .fate-self-status > .marks > div:first-child {
+  /* The native hp node and rage mark are replaced by the two bars below. */
+  .fate-standalone #arena .player.fate-bars-installed > .hp {
     display: none !important;
   }
 
-  .fate-standalone .fate-self-status > .marks > div > .markcount {
-    left: 14px !important;
-    top: 12px !important;
-    width: 9px !important;
-    height: 9px !important;
-    line-height: 9px !important;
-    font-size: 7px !important;
-  }
-
-  .fate-standalone .fate-self-status-empty {
-    display: block;
-    color: #d4d4d4;
-    font-size: .8em;
-    line-height: 1.25;
-  }
-
-  .fate-standalone .fate-equipment {
-    left: 0;
-    bottom: 1.5%;
-    width: 12.7%;
-    height: 18.3%;
-    padding: 7px;
-    overflow: hidden;
-  }
-
-  .fate-standalone .fate-equipment-title,
-  .fate-standalone .fate-skill-panel-title {
-    display: block;
-    height: 21px;
-    line-height: 21px;
-    font-size: clamp(12px, 1.05vw, 17px);
-  }
-
-  .fate-standalone .fate-equipment > .equips {
-    position: absolute !important;
-    left: 7px !important;
-    right: 7px !important;
-    top: 32px !important;
-    bottom: 7px !important;
-    width: auto !important;
-    height: auto !important;
-    overflow-y: auto;
-    text-align: left;
-  }
-
-  .fate-standalone .fate-equipment > .equips > .card {
-    display: block;
-    width: 100% !important;
-    height: 24px !important;
-    margin: 0 !important;
-    border: 1px solid #252525;
-    background: #858585 !important;
-    color: #f4f4f4 !important;
-    line-height: 22px !important;
-  }
-
-  .fate-standalone .fate-equipment > .equips > .card > .name2 {
-    display: block !important;
-    margin-left: 5px !important;
-    font-size: clamp(10px, .85vw, 14px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .fate-standalone .fate-skill-panel {
-    right: 13.1%;
-    bottom: 1.5%;
-    width: 11.1%;
-    height: 18.3%;
-    padding: 7px;
-    overflow: hidden;
-    pointer-events: auto;
-  }
-
-  .fate-standalone .fate-persistent-skills {
-    position: absolute;
-    left: 6px;
-    right: 6px;
-    top: 34px;
-    bottom: 6px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    pointer-events: auto;
-  }
-
-  .fate-standalone .fate-persistent-skill {
+  .fate-standalone #arena .player.fate-bars-installed > .fate-player-resources {
     box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 28px;
-    margin: 2px 0;
-    padding: 2px 3px 2px 29px;
-    border: 1px solid #272727;
-    background: #858585;
-    color: #d0d0d0;
-    text-align: left;
-    line-height: 1.15;
-    font-size: clamp(10px, .86vw, 14px);
-    overflow-wrap: anywhere;
-    cursor: default;
-    position: relative;
-  }
-
-  .fate-standalone .fate-persistent-skill::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    width: 20px;
-    height: 20px;
-    border: 1px solid #4a4a4a;
-    background: #b7b7b7;
-  }
-
-  .fate-standalone .fate-persistent-skill.fate-skill-ready {
-    color: #fff;
-    border-color: #e0e0e0;
-    background: #6f6f6f;
-    cursor: pointer;
-  }
-
-  .fate-standalone .fate-persistent-skill.fate-skill-ready::before {
-    background: #d6d6d6;
-  }
-
-  /* The engine control remains mounted for its click and cleanup semantics;
-     the permanent rows above are the user-facing controls. */
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control {
-    display: none !important;
-  }
-
-  .fate-standalone .fate-skill-panel-title::before {
-    content: "玩家技能按钮";
-  }
-
-  .fate-standalone .fate-round-info {
-    right: 17.2%;
-    top: 0;
-    width: 12.4%;
-    min-height: 6.2%;
-    padding: 4px 6px;
-    font-size: clamp(11px, 1vw, 16px);
-  }
-
-  .fate-standalone .fate-alive-info {
-    right: 0;
-    top: 0;
-    width: 16.3%;
-    min-height: 6.2%;
-    padding: 4px 6px;
-    font-size: clamp(11px, 1vw, 16px);
-  }
-
-  .fate-standalone #arena.fate-table-layout > #arenalog {
-    box-sizing: border-box;
-    right: 0;
-    left: auto;
-    top: 9.5%;
-    width: 16.3%;
-    height: 66.5%;
-    padding: 7px;
-    border: 2px solid #171717;
-    background: #969696;
-    color: #f5f5f5;
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #arenalog > div {
-    box-sizing: border-box;
-    width: 100%;
-    left: 0;
-    padding: 2px 3px;
-    line-height: 1.35;
-    color: #f5f5f5;
-    overflow-wrap: anywhere;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #me {
-    left: 13.4%;
-    top: auto;
-    bottom: 1.5%;
-    width: 60%;
-    /* Keep the hand strip on the same baseline as the equipment and skill
-       panels.  The old 18.3% height made its top edge sit visibly higher. */
-    height: 16.8%;
-    z-index: 3;
-    pointer-events: none;
-    overflow: visible;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #handcards1,
-  .fate-standalone #arena.fate-table-layout > #me > #handcards1 {
-    box-sizing: border-box;
-    left: 0;
-    top: 16px;
-    width: 100%;
-    height: 100%;
-    padding: 0 8px;
-    display: block !important;
-    overflow-x: auto;
-    overflow-y: hidden;
-    pointer-events: auto;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #handcards1 > div,
-  .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div {
-    box-sizing: border-box;
-    display: flex !important;
-    align-items: flex-end;
-    justify-content: center;
-    gap: clamp(2px, .35vw, 6px);
-    width: max-content !important;
-    min-width: 100% !important;
-    height: 100% !important;
-    position: relative !important;
-    left: 0 !important;
-    top: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    transform: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #handcards1 > div > .card,
-  .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div > .card {
-    box-sizing: border-box;
-    position: relative !important;
-    left: auto !important;
-    right: auto !important;
-    top: auto !important;
-    bottom: auto !important;
-    flex: 0 0 auto;
-    width: clamp(78px, 7vw, 126px) !important;
-    height: calc(100% - 4px) !important;
-    margin: 0 !important;
-    transform: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #handcards1 > div > .card.selected,
-  .fate-standalone #arena.fate-table-layout > #me > #handcards1 > div > .card.selected {
-    transform: translateY(-18px) !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player {
-    box-sizing: border-box;
-    width: 12.2% !important;
-    height: 24.5% !important;
-    margin: 0 !important;
-    border: 2px solid #171717;
-    background: #969696;
-    z-index: 2;
-    overflow: visible;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] {
-    left: 86.6% !important;
-    top: 79.8% !important;
-    width: 12.1% !important;
-    height: 18.3% !important;
-    overflow: visible;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .avatar,
-  .fate-standalone #arena.fate-table-layout > .player > .avatar2 {
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    border-radius: 0;
-    background-color: #8b8b8b;
-    background-size: cover;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .name,
-  .fate-standalone #arena.fate-table-layout > .player > .name2 {
-    box-sizing: border-box;
-    left: 3px !important;
-    right: 3px !important;
-    top: 3px !important;
-    width: auto !important;
-    height: 21px;
-    line-height: 21px;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: clamp(11px, 1vw, 16px);
-    text-shadow: 0 1px 2px #000;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .name,
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .name2 {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    left: 5px !important;
-    right: auto !important;
-    top: 4px !important;
-    width: auto !important;
-    max-width: calc(100% - 10px);
-    height: 22px !important;
-    line-height: 22px !important;
-    text-align: left;
-    writing-mode: horizontal-tb !important;
-    -webkit-writing-mode: horizontal-tb !important;
-    z-index: 7;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .identity {
-    left: auto !important;
-    right: 3px !important;
-    top: 26px !important;
-    width: auto !important;
-    height: 18px;
-    line-height: 18px;
-    font-size: clamp(10px, .82vw, 14px);
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .hp {
-    left: 3px !important;
-    right: auto !important;
-    bottom: 3px !important;
-    width: auto !important;
-    min-width: 35px;
-    height: 18px;
-    line-height: 18px;
-    font-size: clamp(10px, .82vw, 14px);
-    text-align: left;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .marks {
-    box-sizing: border-box;
-    top: 4px !important;
-    width: 31px !important;
-    min-height: 40px;
-    max-height: calc(100% - 8px);
-    padding: 2px !important;
-    border: 1px solid #282828;
-    background: rgba(95, 95, 95, .9);
-    overflow-y: auto;
-    z-index: 5;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player.fate-marks-left > .marks {
-    left: calc(100% + 4px) !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player.fate-marks-right > .marks {
-    left: auto !important;
-    right: calc(100% + 4px) !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .marks > div {
-    position: relative !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 25px !important;
-    height: 25px !important;
-    margin: 1px !important;
-    transform: none !important;
-    opacity: 1 !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .marks > div:first-child {
-    display: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .marks > div > .markcount {
-    left: 15px !important;
-    top: 13px !important;
-    width: 10px !important;
-    height: 10px !important;
-    line-height: 10px !important;
-    font-size: 8px !important;
-  }
-
-  /* Every player uses resource bars. Status skills stay in the independent
-     narrow columns; the native rage mark is hidden below. */
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .hp,
-  .fate-standalone #arena.fate-table-layout > .player[data-position="0"] > .marks {
-    display: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .player > .hp {
-    display: none !important;
-  }
-
-  .fate-standalone .fate-rage-native-mark {
-    display: none !important;
-  }
-
-  .fate-standalone .fate-player-resources {
     position: absolute;
     left: 3px;
     right: 3px;
@@ -511,28 +23,28 @@ export const FATE_LAYOUT_STYLE = `
     display: flex;
     flex-direction: column;
     gap: 2px;
-    z-index: 8;
+    z-index: 20;
     pointer-events: none;
   }
 
-  .fate-standalone .fate-player-resource {
+  .fate-standalone #arena .fate-player-resource {
     box-sizing: border-box;
     position: relative;
     display: flex;
     align-items: center;
-    height: 21px;
-    min-height: 21px;
+    height: 20px;
+    min-height: 20px;
     padding: 0 5px;
     border: 1px solid #202020;
     background: #29405f;
     color: #fff;
-    font-size: clamp(10px, .84vw, 14px);
-    line-height: 19px;
+    font-size: 13px;
+    line-height: 18px;
     text-shadow: 0 1px 1px #222;
     overflow: hidden;
   }
 
-  .fate-standalone .fate-player-resource::before {
+  .fate-standalone #arena .fate-player-resource::before {
     content: "";
     position: absolute;
     inset: 0 auto 0 0;
@@ -541,486 +53,419 @@ export const FATE_LAYOUT_STYLE = `
     z-index: 0;
   }
 
-  .fate-standalone .fate-player-resource.fate-rage-resource {
-    background: #29405f;
-  }
-
-  .fate-standalone .fate-player-resource.fate-rage-resource::before {
+  .fate-standalone #arena .fate-rage-resource::before {
     background: #4c82d7;
   }
 
-  .fate-standalone .fate-player-resource-label,
-  .fate-standalone .fate-player-resource-value {
+  .fate-standalone #arena .fate-player-resource-label,
+  .fate-standalone #arena .fate-player-resource-value {
     position: relative;
     z-index: 1;
     white-space: nowrap;
   }
 
-  .fate-standalone .fate-player-resource-value {
+  .fate-standalone #arena .fate-player-resource-value {
     margin-left: auto;
   }
 
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-top-left { left: 20.1% !important; top: 3.5% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-top-center { left: 35.2% !important; top: 3.5% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-top-right { left: 50.3% !important; top: 3.5% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-right-upper { left: 70.0% !important; top: 15.8% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-right-lower { left: 70.0% !important; top: 44.0% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-left-lower { left: 1.3% !important; top: 44.0% !important; }
-  .fate-standalone #arena.fate-table-layout > .player.fate-seat-left-upper { left: 1.3% !important; top: 15.8% !important; }
-
-  .fate-standalone #arena.fate-table-layout > #control {
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-    pointer-events: none;
-    z-index: 12;
+  .fate-standalone #arena .fate-rage-native-mark {
+    display: none !important;
   }
 
-  .fate-standalone #arena.fate-table-layout > #control > .control {
-    box-sizing: border-box;
-    pointer-events: auto;
-    border: 2px solid #171717;
-    background: #969696;
-    color: #f5f5f5;
-    text-shadow: 0 1px 1px #333;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-skill-control {
-    position: absolute !important;
-    right: 13.1% !important;
-    bottom: 1.5% !important;
-    left: auto !important;
-    width: 11.1% !important;
-    min-height: 18.3%;
-    max-height: 18.3%;
-    padding: 28px 6px 6px;
-    overflow-y: auto;
-    transform: none !important;
-  }
-
-  /* Skill controls are moved into the reserved panel when the engine creates
-     them as ordinary controls. This keeps the native click handlers intact
-     while giving every skill choice the same stable location. */
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control {
-    box-sizing: border-box;
-    display: block;
-    position: static !important;
-    width: 100% !important;
-    min-height: 0;
-    max-height: none;
-    margin: 0;
-    padding: 28px 6px 6px;
-    border: 2px solid #171717;
-    background: #969696;
-    color: #f5f5f5;
-    overflow-y: auto;
-    transform: none !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-skill-control::before,
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control::before {
-    content: "技能";
-    position: absolute;
-    left: 7px;
-    right: 7px;
-    top: 5px;
-    height: 20px;
-    line-height: 20px;
+  /* The native count badge sits at the lower-right corner of a hero card.
+   * Widen it just enough for the Fate format's current/limit hand count. */
+  .fate-standalone #arena .player.fate-bars-installed > .count {
+    width: 42px;
+    min-width: 42px;
+    padding: 2px 1px;
     text-align: center;
-    font-size: clamp(11px, 1vw, 16px);
+    font-size: 12px;
+    line-height: 24px;
+    white-space: nowrap;
+    /* Resource rows are deliberately painted above the card image.  Keep
+     * the native hand-count badge above those rows so the current/limit
+     * value remains readable at the card's lower-right corner. */
+    z-index: 21 !important;
   }
 
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-skill-control > div,
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control > div {
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 30px;
-    margin: 2px 0;
-    padding: 2px 3px 2px 31px;
-    border: 1px solid #272727;
-    background: #858585;
-    white-space: normal;
-    line-height: 1.15;
-    text-align: left;
-    font-size: clamp(10px, .86vw, 14px);
-    overflow-wrap: anywhere;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-skill-control > div::before,
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control > div::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    width: 22px;
-    height: 22px;
-    border: 1px solid #4a4a4a;
-    background: #b7b7b7;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-skill-control.fate-has-skill-footer > div:last-child,
-  .fate-standalone #arena.fate-table-layout > .fate-table-ui > .fate-skill-panel > .control.fate-skill-control.fate-has-skill-footer > div:last-child {
-    display: none;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-confirm-control,
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
-    position: absolute !important;
-    left: 33.5% !important;
-    top: 64.5% !important;
+  /* A short chooseBool prompt is rendered as a nobutton dialog.  The
+   * engine's long2 layout places it just under the top player cards, where
+   * its text can overlap their lower-right hand-count badge in an eight-player
+   * game.  Keep it in the empty middle of the table instead. */
+  .fate-standalone #arena > .dialog.nobutton {
+    top: 52% !important;
     bottom: auto !important;
-    transform: none !important;
-    min-width: 82px;
-    padding: 4px 7px;
-    background: #858585;
-  }
-
-  .fate-standalone #arena.fate-table-layout > #control > .control.fate-end-control {
-    left: 52.5% !important;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .dialog {
-    box-sizing: border-box;
-    left: 18.4% !important;
-    top: 52.5% !important;
-    bottom: auto !important;
-    width: 47.8% !important;
-    max-height: 8%;
-    min-height: 0;
-    border: 2px solid #171717;
-    background: #969696;
-    color: #f5f5f5;
-    overflow-y: auto;
-    z-index: 19;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .dialog .caption,
-  .fate-standalone #arena.fate-table-layout > .dialog .text,
-  .fate-standalone #arena.fate-table-layout > .dialog .content {
-    color: #f5f5f5;
-    text-shadow: 0 1px 1px #333;
-  }
-
-  .fate-standalone #arena.fate-table-layout > .card[data-position="0"],
-  .fate-standalone #arena.fate-table-layout > .popup[data-position="0"] {
-    z-index: 9;
   }
 `;
 
-const SEAT_SLOTS = [
-  "fate-seat-left-lower",
-  "fate-seat-left-upper",
-  "fate-seat-top-left",
-  "fate-seat-top-center",
-  "fate-seat-top-right",
-  "fate-seat-right-upper",
-  "fate-seat-right-lower",
-];
-
-const SLOT_SELECTIONS = {
-  1: [3],
-  2: [2, 4],
-  3: [1, 3, 5],
-  4: [0, 2, 4, 6],
-  5: [0, 1, 3, 5, 6],
-  6: [0, 1, 2, 4, 5, 6],
-  7: [0, 1, 2, 3, 4, 5, 6],
-};
-
-const PERMANENT_SKILL_EXCLUDE = /(?:_effect|_card|_ready|_once|_cost|_target|_rule)$/;
-const LOG_NOISE = [
-  /进入.*(?:准备|摸牌|判定|出牌|弃牌)阶段/,
-  /进入.*施法阶段/,
-  /的回合开始$/,
-  /摸了[^ ]*张牌$/,
-];
-const LOG_REPEAT_WINDOW = 10;
-
-function text(value) {
-  return value == null ? "—" : String(value);
+function isRageMark(mark) {
+  return mark?.name === "fate_rage_rule" ||
+    mark?.skill === "fate_rage_rule" ||
+    mark?.dataset?.skill === "fate_rage_rule" ||
+    mark?.dataset?.name === "fate_rage_rule";
 }
 
-function createPanel(className, parent) {
-  const node = document.createElement("div");
-  node.className = className;
-  parent.appendChild(node);
-  return node;
-}
-
-function updateSeatLayout() {
-  if (!ui.arena || !game.me) return;
-  for (const player of game.players) {
-    if (player !== game.me) player.classList.remove(...SEAT_SLOTS, "fate-marks-left", "fate-marks-right");
-  }
-  const opponents = game.players.filter(player => player !== game.me && player.isAlive());
-  const positions = SLOT_SELECTIONS[Math.min(7, opponents.length)] || SLOT_SELECTIONS[7];
-  opponents.forEach((player, index) => {
-    const slotIndex = positions[index] ?? index;
-    const slot = SEAT_SLOTS[slotIndex];
-    if (!slot) return;
-    player.classList.add(slot);
-    const rightSide = slot.includes("right");
-    player.classList.add(rightSide ? "fate-marks-left" : "fate-marks-right");
-  });
-  game.me.classList.remove(...SEAT_SLOTS, "fate-marks-left", "fate-marks-right");
-}
-
-function updateSelfStatus(panel) {
-  if (!game.me || !panel) return;
-  const player = game.me;
-  const marks = player.node?.marks;
-  const activeMarks = marks
-    ? Math.max(0, Array.from(marks.children).filter(mark => !mark.classList.contains("fate-rage-native-mark")).length - 1)
-    : 0;
-  panel.innerHTML = `
-    <span class="fate-self-status-title">玩家状态</span>
-    <span class="fate-self-status-empty">${activeMarks ? "" : "暂无状态"}</span>
-  `;
-  // The status text is refreshed as cards and rage change. Reattach the native
-  // mark strip after replacing that text so self buffs remain visible here.
-  if (marks) panel.appendChild(marks);
-}
-
-function hideNativeResourceMarks(player) {
+function hideNativeRageMark(player) {
   const marks = player?.node?.marks;
   if (!marks) return;
   for (const mark of Array.from(marks.children)) {
-    const isRage = mark.name === "fate_rage_rule" || mark.skill === "fate_rage_rule";
-    mark.classList.toggle("fate-rage-native-mark", isRage);
+    mark.classList.toggle("fate-rage-native-mark", isRageMark(mark));
+    mark.classList.toggle("fate-nonstatus-mark", !mark.name || mark === marks.firstElementChild);
   }
 }
 
-function updatePlayerResources(player) {
-  if (!player) return;
-  hideNativeResourceMarks(player);
-  let resources = player.querySelector?.(".fate-player-resources");
-  if (!resources) {
-    resources = document.createElement("div");
-    resources.className = "fate-player-resources";
-    resources.innerHTML = `
-      <div class="fate-player-resource fate-health-resource">
-        <span class="fate-player-resource-label">生命</span>
-        <span class="fate-player-resource-value"></span>
-      </div>
-      <div class="fate-player-resource fate-rage-resource">
-        <span class="fate-player-resource-label">怒气</span>
-        <span class="fate-player-resource-value"></span>
-      </div>
-    `;
-    player.appendChild(resources);
+function ensureResourceRows(player) {
+  let resources = player.querySelector?.(":scope > .fate-player-resources");
+  if (resources) return resources;
+
+  resources = document.createElement("div");
+  resources.className = "fate-player-resources";
+  resources.innerHTML = `
+    <div class="fate-player-resource fate-health-resource">
+      <span class="fate-player-resource-label">生命</span>
+      <span class="fate-player-resource-value"></span>
+    </div>
+    <div class="fate-player-resource fate-rage-resource">
+      <span class="fate-player-resource-label">怒气</span>
+      <span class="fate-player-resource-value"></span>
+    </div>
+  `;
+  player.appendChild(resources);
+  return resources;
+}
+
+function updateHandCount(player) {
+  const countNode = player?.node?.count;
+  if (!countNode) return;
+
+  const handCount = Math.max(0, Number(player.countCards?.("h")) || 0);
+  let handLimit = 4;
+  try {
+    const calculatedLimit = Number(player.getHandcardLimit?.());
+    if (Number.isFinite(calculatedLimit)) handLimit = Math.max(0, calculatedLimit);
+    else if (calculatedLimit === Infinity) handLimit = "∞";
+  } catch {
+    // The native hand-limit method is not available while a player is being
+    // created; the next timer tick will replace this fallback.
   }
+
+  const text = `${handCount}/${handLimit}`;
+  if (countNode.textContent !== text) countNode.textContent = text;
+}
+
+function updatePlayerResources(player) {
+  if (!player || !player.isConnected) return;
+  hideNativeRageMark(player);
+  player.classList.add("fate-bars-installed");
+  updateHandCount(player);
+
+  const resources = ensureResourceRows(player);
   const hp = Math.max(0, Number(player.hp) || 0);
-  const maxHp = Math.max(1, Number(player.maxHp) || hp || 1);
+  const maxHp = Math.max(1, Number(player.maxHp) || 1);
   const rage = Math.max(0, Number(player.countMark?.("fate_rage_rule")) || 0);
-  const maxRage = 3;
   const rows = [
     [".fate-health-resource", hp, maxHp],
-    [".fate-rage-resource", rage, maxRage],
+    [".fate-rage-resource", rage, 3],
   ];
+
   for (const [selector, value, max] of rows) {
     const row = resources.querySelector(selector);
     if (!row) continue;
-    row.querySelector(".fate-player-resource-value").textContent = `${value}/${max}`;
+    const valueNode = row.querySelector(".fate-player-resource-value");
+    if (valueNode) valueNode.textContent = `${value}/${max}`;
     row.style.setProperty("--fate-resource-percent", `${Math.min(100, (value / max) * 100)}%`);
   }
 }
 
-function getPermanentSkills() {
-  if (!game.me) return [];
-  const skills = game.me.getSkills?.() || game.me.skills || [];
-  return [...new Set(skills)].filter(skill =>
-    typeof skill === "string" &&
-    skill.startsWith("fate_") &&
-    !PERMANENT_SKILL_EXCLUDE.test(skill) &&
-    lib.translate[skill] &&
-    lib.translate[`${skill}_info`],
-  );
+function allPlayers() {
+  return [...new Set([...(game.players || []), ...(game.dead || [])])];
 }
 
-function createPersistentSkills(panel) {
-  if (!panel || panel._fatePersistentSkills) return;
-  const container = document.createElement("div");
-  container.className = "fate-persistent-skills";
-  panel.appendChild(container);
-  const buttons = new Map();
-  for (const skill of getPermanentSkills()) {
-    const button = document.createElement("div");
-    button.className = "fate-persistent-skill";
-    button.dataset.skill = skill;
-    button.textContent = get.translation(skill);
-    button.title = lib.translate[`${skill}_info`];
-    button.addEventListener("click", () => {
-      const native = panel.querySelector(`.control.fate-skill-control [data-fate-skill="${skill}"]`);
-      if (native) native.click();
-    });
-    container.appendChild(button);
-    buttons.set(skill, button);
-  }
-  panel._fatePersistentSkills = { container, buttons };
-}
-
-function syncPersistentSkills(panel) {
-  const state = panel?._fatePersistentSkills;
-  if (!state) return;
-  const nativeButtons = Array.from(panel.querySelectorAll(".control.fate-skill-control > div"));
-  for (const native of nativeButtons) {
-    if (typeof native.link === "string") native.dataset.fateSkill = native.link;
-  }
-  for (const [skill, button] of state.buttons) {
-    const active = nativeButtons.some(native => native.dataset.fateSkill === skill);
-    button.classList.toggle("fate-skill-ready", active);
-    button.setAttribute("aria-disabled", active ? "false" : "true");
+function phaseUseRoot(event) {
+  const visited = new Set();
+  let current = event;
+  while (current && !visited.has(current)) {
+    if (current.name === 'chooseToUse' && current.type === 'phase' && !current.respondTo) return current;
+    visited.add(current);
+    current = current.getParent?.(1, true) || current.parent;
   }
 }
 
-function cleanLog(log) {
-  if (!log || log.dataset.fateCleaning === "1") return;
-  log.dataset.fateCleaning = "1";
-  try {
-    const entries = Array.from(log.children);
-    let previous = "";
-    const recent = [];
-    for (const entry of entries) {
-      const content = entry.textContent?.replace(/\s+/g, " ").trim() || "";
-      const repeated = content && recent.includes(content);
-      if (LOG_NOISE.some(pattern => pattern.test(content)) || content === previous || repeated) {
-        entry.remove();
-        continue;
-      }
-      previous = content;
-      recent.push(content);
-      if (recent.length > LOG_REPEAT_WINDOW) recent.shift();
-    }
-    while (log.children.length > 120) log.firstElementChild?.remove();
-  } finally {
-    log.dataset.fateCleaning = "0";
-  }
-}
-
-function updateTableInfo(roundInfo, aliveInfo) {
-  if (!roundInfo || !aliveInfo) return;
-  const round = Number(game.roundNumber) || 0;
-  const pile = ui.cardPile?.childElementCount || 0;
-  roundInfo.textContent = `第${round}轮  摸牌堆剩余 ${pile}`;
-  const all = game.players.concat(game.dead || []);
-  const maxByFaction = { fate_sentinel: 0, fate_scourge: 0, fate_neutral: 0 };
-  const aliveByFaction = { fate_sentinel: 0, fate_scourge: 0, fate_neutral: 0 };
-  for (const player of all) {
-    if (!(player.identity in maxByFaction)) continue;
-    maxByFaction[player.identity] += 1;
-    if (player.isAlive()) aliveByFaction[player.identity] += 1;
-  }
-  const label = faction => {
-    const name = get.translation(faction) || faction;
-    return `${name}${aliveByFaction[faction]}/${maxByFaction[faction]}`;
-  };
-  aliveInfo.textContent = `场上存活  ${label("fate_scourge")}  ${label("fate_sentinel")}  ${label("fate_neutral")}`;
-}
-
-function classifyControls() {
-  if (!ui.control) return;
-  const skillPanel = ui.arena?.querySelector(".fate-skill-panel");
-  for (const node of Array.from(ui.control.children)) {
-    node.classList.remove("fate-skill-control", "fate-confirm-control", "fate-end-control", "fate-has-skill-footer");
-    const links = Array.from(node.children).map(child => child.link).filter(Boolean);
-    const labels = Array.from(node.children)
-      .map(child => child.textContent?.trim())
-      .filter(Boolean);
-    const hasKnownSkill = links.some(link => typeof link === "string" && Boolean(lib.skill[link]));
-    const skillLike = node === ui.skills || node === ui.skills2 || node === ui.skills3 ||
-      Array.isArray(node.skills) || hasKnownSkill;
-    if (skillLike) {
-      node.classList.add("fate-skill-control");
-      if (links.at(-1) === ui.click?.skill) node.classList.add("fate-has-skill-footer");
-      if (skillPanel && node.parentNode !== skillPanel) skillPanel.appendChild(node);
-    } else if (node === ui.confirm) {
-      node.classList.add("fate-confirm-control");
-    } else if (node.stayleft) {
-      node.classList.add("fate-end-control");
-    } else {
-      // Some Fate prompts are created as ordinary controls rather than through
-      // ui.create.skills. Keep those choices in the same skill panel instead
-      // of letting the engine place them over the hero card.
-      const nonSkillLabels = new Set([
-        "确定", "取消", "结束", "结束回合", "全选", "取消选择", "AI代选",
-        "确定选择", "取消选择", "cancel", "ok",
-      ]);
-      if (labels.some(label => !nonSkillLabels.has(label))) {
-        node.classList.add("fate-skill-control");
-        if (skillPanel && node.parentNode !== skillPanel) skillPanel.appendChild(node);
-      }
-    }
-  }
-}
-
-function enableLogScroll(log) {
-  if (!log || log.dataset.fateScrollReady) return;
-  log.dataset.fateScrollReady = "1";
-  log.dataset.fateAutoScroll = "1";
-  cleanLog(log);
-  log.addEventListener("scroll", () => {
-    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight <= 4;
-    log.dataset.fateAutoScroll = atBottom ? "1" : "0";
-  });
-  const observer = new MutationObserver(() => {
-    cleanLog(log);
-    if (log.dataset.fateAutoScroll === "1") log.scrollTop = log.scrollHeight;
-  });
-  observer.observe(log, { childList: true, subtree: true, characterData: true });
-  log._fateScrollObserver = observer;
-}
-
+/**
+ * Install the HUD and keep resource values in sync.
+ * Kept under the old export name because the game mode already calls it.
+ */
 export function installFateLayout() {
-  if (!lib.config.fate_standalone || !ui.arena || !game.me) return;
-  if (ui.arena.classList.contains("fate-table-layout")) return;
-  ui.arena.classList.add("fate-table-layout");
+  if (!lib.config.fate_standalone || !ui.arena) return;
 
-  const tableUi = createPanel("fate-table-ui", ui.arena);
-  const playfield = createPanel("fate-playfield", tableUi);
-  playfield.setAttribute("aria-label", "出牌区");
+  for (const player of allPlayers()) updatePlayerResources(player);
+  updateHud();
 
-  const selfStatus = createPanel("fate-self-status", tableUi);
-  const equipment = createPanel("fate-equipment", tableUi);
-  createPanel("fate-equipment-title", equipment).textContent = "装备栏";
-  if (game.me.node?.equips) equipment.appendChild(game.me.node.equips);
-  if (game.me.node?.marks) selfStatus.appendChild(game.me.node.marks);
-
-  const skillPanel = createPanel("fate-skill-panel", tableUi);
-  createPanel("fate-skill-panel-title", skillPanel);
-  createPersistentSkills(skillPanel);
-
-  const roundInfo = createPanel("fate-round-info", tableUi);
-  const aliveInfo = createPanel("fate-alive-info", tableUi);
-  if (ui.cardPileNumber) ui.cardPileNumber.style.display = "none";
-
-  updateSeatLayout();
-  game.players.forEach(updatePlayerResources);
-  updateSelfStatus(selfStatus);
-  updateTableInfo(roundInfo, aliveInfo);
-  enableLogScroll(ui.arenalog);
-  classifyControls();
-  syncPersistentSkills(skillPanel);
-
-  const controlObserver = ui.control
-    ? new MutationObserver(classifyControls)
-    : null;
-  controlObserver?.observe(ui.control, { childList: true });
-
-  const timer = setInterval(() => {
-    if (!ui.arena || !ui.arena.classList.contains("fate-table-layout")) {
-      clearInterval(timer);
-      controlObserver?.disconnect();
+  if (ui.fateResourceTimer) clearInterval(ui.fateResourceTimer);
+  ui.fateResourceTimer = setInterval(() => {
+    if (!ui.arena?.isConnected) {
+      clearInterval(ui.fateResourceTimer);
+      ui.fateResourceTimer = null;
       return;
     }
-    updateSeatLayout();
-    game.players.forEach(updatePlayerResources);
-    updateSelfStatus(selfStatus);
-    updateTableInfo(roundInfo, aliveInfo);
-    classifyControls();
-    syncPersistentSkills(skillPanel);
-  }, 500);
-  ui.fateLayout = { tableUi, selfStatus, equipment, skillPanel, roundInfo, aliveInfo, timer, controlObserver };
+    for (const player of allPlayers()) updatePlayerResources(player);
+    updateHud();
+  }, 250);
+}
+
+const HUD_STYLE = `
+.fate-hud .fate-inactive-confirm {display:none!important;}
+.fate-hud .fate-action-order {position:absolute;left:5px;top:32px;padding:3px 5px;background:#121b23d9;border:1px solid #8f7952;color:#ddcfad;font:12px sans-serif;z-index:22;border-radius:3px;}
+.fate-hud .fate-action-order.current {border-color:#eac570;color:#fff2c4;}
+.fate-hud #arena {inset:48px 0 0!important;width:100%!important;height:calc(100% - 48px)!important;}
+.fate-hud .touchinfo {display:none!important;}
+.fate-hud #arena > .player:not(.dead) {opacity:1!important;}
+.fate-hud #window {background:#171d20!important;}
+.fate-hud #arena::before {content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 45% 40%,#343a3a,#141a1e);pointer-events:none;z-index:0;}
+.fate-hud #system {top:7px!important;left:10px!important;width:calc(100% - 20px)!important;}
+.fate-hud #system .system {background:#20272b;border:1px solid #75654b;border-radius:4px;font-size:14px;}
+.fate-hud #arena > .player {width:138px!important;height:176px!important;transform:none!important;transition:left .2s,top .2s;}
+.fate-hud #arena > .player > .avatar {inset:0!important;width:100%!important;height:100%!important;border-radius:5px!important;background-size:cover!important;}
+.fate-hud #arena > .player > .name {top:5px!important;left:6px!important;writing-mode:horizontal-tb!important;font:14px sans-serif!important;white-space:nowrap;background:#101519b8;padding:3px;max-width:95px;}
+.fate-hud #arena > .player > .identity {left:auto!important;right:4px!important;top:5px!important;font:14px sans-serif!important;}
+.fate-hud #arena > .player > .identity > div {writing-mode:horizontal-tb!important;}
+.fate-hud #arena .player > .count {left:auto!important;right:-43px!important;top:auto!important;bottom:0!important;transform:none!important;background:#151c21!important;border:1px solid #8d7954!important;border-radius:4px!important;width:38px!important;min-width:38px!important;line-height:22px!important;z-index:21!important;}
+.fate-hud #arena .player > .marks {left:auto!important;right:-42px!important;top:auto!important;bottom:32px!important;width:34px!important;height:auto!important;padding:0!important;display:flex;flex-direction:column;gap:4px;}
+.fate-hud #arena .player .marks > .mark:not(.fate-rage-native-mark) {position:relative!important;left:auto!important;top:auto!important;transform:none!important;opacity:1!important;width:30px!important;height:30px!important;background:#4e5355!important;border:1px solid #898d8e!important;border-radius:3px!important;}
+.fate-hud #arena .player .marks > .mark:not(.fate-rage-native-mark)::before {content:'';position:absolute;inset:5px;border:1px solid #737879;pointer-events:none;}
+.fate-hud #arena .player .marks > div:not(.mark) {display:none!important;}
+.fate-hud #arena .player .marks .marktext {font:11px sans-serif!important;writing-mode:horizontal-tb!important;}
+.fate-hud #arena > #me,.fate-hud #arena > #mebg,.fate-hud #arena > #autonode {left:174px!important;width:calc(100% - 650px)!important;bottom:10px!important;top:auto!important;height:176px!important;border-radius:4px!important;}
+.fate-hud #me {z-index:4!important;background:#10171dcc!important;border:1px solid #79674a;}
+.fate-hud #mebg,.fate-hud #autonode {display:none!important;}
+.fate-hud #me .fakeme {display:none!important;}
+.fate-hud #me #handcards1 {left:8px!important;top:6px!important;width:calc(100% - 16px)!important;height:150px!important;padding:0!important;}
+.fate-hud #me #handcards2 {display:none!important;}
+.fate-hud #me .handcards {left:0!important;top:0!important;}
+.fate-hud #arena > #control {left:190px!important;width:calc(100% - 680px)!important;top:auto!important;bottom:198px!important;height:34px!important;z-index:30!important;}
+.fate-hud #control {display:flex!important;justify-content:center;gap:8px;}
+.fate-hud #control > .control {position:relative!important;left:auto!important;transform:none!important;flex:none;}
+.fate-hud .fate-nonstatus-mark {display:none!important;}
+.fate-hud #control .control {background:linear-gradient(#3c4141,#20282c);border:1px solid #9d865c;border-radius:4px;color:#eee;font:16px sans-serif;}
+.fate-hud #arena > .dialog.nobutton {left:190px!important;width:calc(100% - 680px)!important;top:auto!important;bottom:240px!important;min-height:30px!important;background:#141c22df!important;border:1px solid #685b45;border-radius:5px;padding:6px;}
+.fate-hud #arena > .dialog.nobutton .caption {font:16px sans-serif!important;}
+.fate-hud #arena > .dialog:not(.nobutton) {z-index:25;}
+.fate-hud .fate-response-bar {position:absolute;left:174px;width:calc(100% - 650px);bottom:196px;height:76px;box-sizing:border-box;padding:8px 14px;display:flex;align-items:center;gap:12px;background:linear-gradient(#20282a,#10171b);border:1px solid #998257;border-radius:5px;z-index:35;color:#eee;font:16px sans-serif;}
+.fate-hud .fate-response-bar[hidden] {display:none!important;}
+.fate-hud .fate-response-text {position:relative;flex:1;min-width:0;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fate-hud .fate-response-controls {position:relative;display:flex;align-items:center;gap:10px;flex:none;}
+.fate-hud .fate-response-bar button {position:relative;flex:none;min-width:94px;padding:10px 12px;font:16px sans-serif;color:#eee;background:linear-gradient(#45494b,#20282c);border:1px solid #818582;border-radius:4px;cursor:pointer;}
+.fate-hud .fate-response-bar .fate-response-confirm {background:linear-gradient(#77602f,#433419);border-color:#d6b267;color:#fff0c2;}
+.fate-hud .fate-response-bar button:disabled {opacity:.4;cursor:default;}
+.fate-hud .fate-end-turn {background:linear-gradient(#70352c,#3e1d19)!important;border-color:#bd745e!important;color:#ffe0d7!important;}
+.fate-hud #arena.fate-interaction-active > .dialog.nobutton,.fate-hud #arena.fate-interaction-active > #control {display:none!important;}
+.fate-hud #me .handcards > .card.selected {outline:2px solid #4ce8f2!important;box-shadow:0 0 12px #2fd7ef!important;}
+.fate-hud .fate-response-source {color:#f17b67;}
+.fate-hud .fate-response-needed {color:#60d7ec;}
+.fate-hud #arena > #arenalog {display:none!important;}
+.fate-hud .fate-hud-panel {position:absolute;box-sizing:border-box;background:linear-gradient(145deg,#263034,#11191e);border:1px solid #75664c;border-radius:5px;color:#e4ded1;font:14px sans-serif;z-index:3;}
+.fate-hud .fate-equipment {left:10px;bottom:10px;width:150px;height:176px;display:flex;padding:10px;gap:8px;}
+.fate-hud .fate-equipment-slot {position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;padding:8px 3px;border:1px solid #555a58;border-radius:3px;overflow:hidden;}
+.fate-hud .fate-equipment-slot small {writing-mode:vertical-rl;font-size:13px;}
+.fate-hud .fate-skill-panel {right:200px;bottom:10px;width:266px;height:176px;padding:8px;overflow:auto;z-index:25;}
+.fate-hud .fate-skill-button {width:100%;min-height:48px;display:flex;align-items:center;gap:10px;padding:5px 8px;margin:4px 0;background:#222c32;color:#9aa0a2;border:1px solid #4e585b;border-radius:4px;font:15px sans-serif;text-align:left;cursor:default;}
+.fate-hud .fate-skill-button:not(:disabled) {color:#f2e2b5;border-color:#c6a565;box-shadow:inset 0 0 8px #ad842637;cursor:pointer;}
+.fate-hud .fate-icon-placeholder {width:34px;height:34px;flex:none;background:#565b5e;border:1px solid #85898b;border-radius:3px;display:inline-block;}
+.fate-hud .fate-log-panel {right:10px;top:12px;bottom:202px;width:216px;padding:10px;z-index:3;}
+.fate-hud .fate-log-content {position:absolute;inset:40px 8px 8px;overflow:auto;font-size:13px;line-height:1.6;}
+.fate-hud .fate-log-content > div {position:relative!important;margin:0 0 9px!important;}
+.fate-hud .fate-summary {position:absolute;left:430px;right:430px;top:-39px;text-align:center;color:#dfd6be;font:14px sans-serif;z-index:5;pointer-events:none;}
+.fate-hud .fate-self-status {position:absolute;left:174px;bottom:190px;display:flex;gap:6px;z-index:5;color:#ddd;font:13px sans-serif;}
+.fate-hud .fate-self-status > span {display:flex;align-items:center;gap:4px;background:#172027;border:1px solid #655b49;padding:3px 6px;border-radius:3px;}
+.fate-hud .fate-self-status .fate-icon-placeholder {width:24px;height:24px;}
+.fate-hud #arena .fate-native-skills {display:none!important;}
+.fate-hud #arena .fate-self > .equips,.fate-hud #arena .fate-self > .marks {display:none!important;}
+`;
+
+function element(tag, className, parent, text) {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text) node.textContent = text;
+  parent.appendChild(node);
+  return node;
+}
+
+function ensureHud() {
+  if (ui.fateHud?.arena === ui.arena) return ui.fateHud;
+  document.title='宿命 Reborn';
+  ui.fateHud?.observer?.disconnect();
+  document.documentElement.classList.add('fate-hud');
+  if (!document.getElementById('fate-hud-style')) {
+    const style = element('style', '', document.head);
+    style.id = 'fate-hud-style'; style.textContent = HUD_STYLE;
+  }
+  const equipment = element('div', 'fate-hud-panel fate-equipment', ui.arena);
+  const slots = ['武器', '防具'].map(name => {
+    const slot = element('div', 'fate-equipment-slot', equipment);
+    element('strong', '', slot, name);
+    return element('small', '', slot, '未装备');
+  });
+  const skills = element('div', 'fate-hud-panel fate-skill-panel', ui.arena);
+  const logPanel = element('div', 'fate-hud-panel fate-log-panel', ui.arena);
+  element('strong', '', logPanel, '对局记录');
+  const log = element('div', 'fate-log-content', logPanel);
+  const summary = element('div', 'fate-summary', ui.arena);
+  const status = element('div', 'fate-self-status', ui.arena);
+  const response = element('div','fate-response-bar',ui.arena); response.hidden=true;
+  const responseText=element('span','fate-response-text',response);
+  const responseControls=element('span','fate-response-controls',response);
+  const responseConfirm=element('button','fate-response-confirm',response,'确定');
+  const responseCancel=element('button','',response,'放弃响应');
+  const endTurn=element('button','fate-end-turn',response,'结束回合');
+  responseConfirm.addEventListener('click',()=>{if(hud.responseEvent===_status.event&&canConfirmInteraction(_status.event,ui.confirm)){_status.event.fateManualResponseConfirmed=true;ui.click.ok();}});
+  responseCancel.addEventListener('click',()=>{
+    const current=_status.event;
+    if(hud.responseEvent!==current)return;
+    // At the root of the action phase, cancellation means "do not use this
+    // card": remove the current card/target choice and leave the phase open.
+    const directPhase=current?.name==='chooseToUse'&&current.type==='phase'&&!current.respondTo;
+    if(directPhase) {
+      if(!ui.selected.cards.length&&!ui.selected.targets.length&&!ui.selected.buttons.length) return;
+      game.uncheck();
+      game.check();
+      return;
+    }
+    if(!canCancelInteraction(current,ui.confirm))return;
+    ui.click.cancel();
+  });
+  endTurn.addEventListener('click',()=>{
+    const current=_status.event;
+    if(hud.responseEvent!==current||!isFatePhaseUse(current))return;
+    const root=phaseUseRoot(current);
+    // A child picker (for example, a skill target) must first be dismissed.
+    // updateHud then finishes the resumed root phase on the next UI tick.
+    if(root&&root!==current) {
+      hud.endPhaseRoot=root;
+      ui.click.cancel();
+      return;
+    }
+    ui.click.cancel();
+  });
+  const hud = ui.fateHud = {arena:ui.arena, slots, skills, log, summary, status, response, responseText, responseControls, responseConfirm, responseCancel, endTurn, follow:true, entries:new WeakSet(), skillNodes:new Map(), width:0};
+  log.addEventListener('scroll', () => {hud.follow = log.scrollHeight-log.scrollTop-log.clientHeight < 24;});
+  if (ui.sidebar) {
+    const observer = new MutationObserver(records => {
+      const follow = hud.follow;
+      for (const record of records) for (const entry of record.addedNodes) {
+        if (entry.nodeType !== 1 || hud.entries.has(entry)) continue;
+        hud.entries.add(entry);
+        if (/获得了.*怒气|移去了.*怒气|进入.*阶段|的回合开始/.test(entry.textContent)) continue;
+        if(log.lastElementChild?.textContent===entry.textContent) continue;
+        log.appendChild(entry.cloneNode(true));
+      }
+      while (log.children.length > 400) log.firstChild.remove();
+      if (follow) {log.scrollTop=log.scrollHeight;hud.follow=true;}
+    });
+    observer.observe(ui.sidebar,{childList:true}); hud.observer=observer;
+  }
+  return hud;
+}
+
+function updateHud() {
+  if (!game.me?.name) return;
+  const hud = ensureHud();
+  if(hud.endPhaseRoot&&_status.event===hud.endPhaseRoot) {
+    hud.endPhaseRoot=null;
+    ui.click.cancel();
+    return;
+  }
+  const interacting=isFateInteraction(_status.event,ui.confirm);
+  const responding=isFateResponse(_status.event);
+  ui.confirm?.classList.toggle('fate-inactive-confirm',!shouldShowNativeConfirmation(_status.event,ui.confirm));
+  hud.response.hidden=!interacting;ui.arena.classList.toggle('fate-interaction-active',interacting);
+  hud.responseEvent=interacting?_status.event:null;
+  if(interacting) {
+    const current=_status.event;
+    const controlChoice=current.name==='chooseControl';
+    const directPhase=current?.name==='chooseToUse'&&current.type==='phase'&&!current.respondTo;
+    const phaseUse=isFatePhaseUse(current);
+    hud.responseControls.replaceChildren();
+    if(controlChoice) {
+      for(const control of current.controls||[]) {
+        const choice=element('button','',hud.responseControls,control==='cancel2'?'取消':get.translation(control));
+        choice.addEventListener('click',()=>{
+          if(hud.responseEvent!==_status.event)return;
+          const native=[...(ui.controls||[])].flatMap(bar=>[...bar.children]).find(node=>node.link===control);
+          if(native) ui.click.control.call(native);
+        });
+      }
+    }
+    hud.responseControls.hidden=!controlChoice;
+    hud.responseConfirm.hidden=controlChoice;
+    hud.responseCancel.hidden=controlChoice;
+    hud.responseConfirm.disabled=!canConfirmInteraction(current,ui.confirm);
+    const hasPhaseSelection=!!(ui.selected.cards.length||ui.selected.targets.length||ui.selected.buttons.length);
+    const cancellable=canCancelInteraction(current,ui.confirm);
+    if(!controlChoice) {
+      hud.responseCancel.hidden=false;
+      hud.responseCancel.disabled=directPhase?!hasPhaseSelection:!cancellable;
+    }
+    hud.responseCancel.textContent=responding?'放弃响应':'取消';
+    hud.endTurn.hidden=!phaseUse||controlChoice;
+    hud.endTurn.disabled=!phaseUse;
+    if(current.type==='respondShan'&&current.respondTo) {
+      const [source,card]=current.respondTo;
+      const attack=game.hasNature(card,'fate_fire')?'火焰攻击':game.hasNature(card,'fate_chaos')?'混乱攻击':'普通攻击';
+      hud.responseText.replaceChildren();
+      element('span','fate-response-source',hud.responseText,get.translation(source.name));
+      element('span','',hud.responseText,`对你使用${attack}，请使用`);
+      element('span','fate-response-needed',hud.responseText,`${current.shanRequired>1?current.shanRequired+'张':'一张'}闪避`);
+      element('span','',hud.responseText,'。');
+    } else {
+      const caption=ui.dialog?.querySelector('.caption')?.textContent;
+      const fallback=directPhase?'请选择要使用的牌。':responding?'请选择响应牌，或放弃响应。':'请选择牌或目标，然后确认。';
+      hud.responseText.textContent=caption||(typeof current.prompt==='string'?current.prompt:fallback);
+    }
+  }
+  const arena = ui.arena, width=arena.clientWidth, height=arena.clientHeight;
+  for(const [key,value] of Object.entries({left:'174px',width:`${width-650}px`,bottom:'10px',top:'auto',height:'176px'})) ui.me?.style.setProperty(key,value,'important');
+  if(ui.cardPileNumber) ui.cardPileNumber.style.setProperty('display','none','important');
+  if(ui.handcards1Container) for(const [key,value] of Object.entries({left:'8px',top:'12px',width:`${width-666}px`,height:'150px'})) ui.handcards1Container.style.setProperty(key,value,'important');
+  const opponents = allPlayers().filter(player=>player!==game.me).sort((a,b)=>Number(b.dataset.position)-Number(a.dataset.position));
+  for (const player of allPlayers()) {
+    let badge=player.querySelector('.fate-action-order');
+    if(!badge) badge=element('span','fate-action-order',player);
+    const index=game.fateReborn?.actionOrder?.indexOf(player.playerid) ?? -1;
+    badge.textContent=index<0?'':'行动 '+(index+1);
+    badge.classList.toggle('current',_status.currentPhase===player);
+  }
+  const positions=hudSeats(width,height,opponents.length);
+  const place=(player,x,y)=>{
+    player.style.setProperty('width','138px','important');
+    player.style.setProperty('height','176px','important');
+    if(player.node?.avatar) {player.node.avatar.style.setProperty('width','100%','important');player.node.avatar.style.setProperty('height','100%','important');}
+    player.style.setProperty('left',`${Math.round(x)}px`,'important');
+    player.style.setProperty('top',`${Math.round(y)}px`,'important');
+    player.style.setProperty('bottom','auto','important');
+  };
+  opponents.forEach((player,i)=>place(player,...positions[i]));
+  game.me.classList.add('fate-self'); place(game.me,...hudSelfSeat(width,height));
+  for (const player of allPlayers()) if(player.node?.name) player.node.name.textContent=get.translation(player.name);
+  if(hud.width!==width) {hud.width=width;ui.updatehl?.();}
+  // Use actual identity keys from the mode, rather than exposing hidden identities.
+  const names={fate_scourge:'夜魇',fate_guard:'天辉',fate_neutral:'中立',fate_sentinel:'天辉'};
+  const counts=new Map();
+  for(const player of allPlayers()) {const name=names[player.identity]||get.translation(player.identity);if(!counts.has(name)) counts.set(name,[0,0]);const count=counts.get(name);count[1]++;if(game.players.includes(player))count[0]++;}
+  hud.summary.textContent=`第${game.roundNumber||0}轮 · 摸牌堆 ${ui.cardPile?.childElementCount||0}　${[...counts].map(([name,c])=>`${name} ${c[0]}/${c[1]}`).join('　')}`;
+  const equipped=game.me.getCards('e');
+  hud.slots.forEach((slot,i)=>{const card=equipped.find(card=>get.subtype(card)===(i?'equip2':'equip1'));slot.textContent=card?get.translation(card.name):'未装备';slot.title=card?get.translation(`${card.name}_info`):'';slot.onclick=card?(event)=>ui.click.card.call(card,event):null;slot.parentElement.style.backgroundImage=card?.style.backgroundImage||'';slot.parentElement.style.backgroundSize='cover';});
+  const native=[ui.skills,ui.skills2,ui.skills3].filter(Boolean);
+  const available=new Set();
+  for(const control of native) {if(control.isConnected && control.style.display!=='none' && _status.event?.isMine?.()) for(const skill of control.skills||[]) available.add(skill);control.classList.add('fate-native-skills');}
+  const hero=lib.character[game.me.name];
+  const skills=(hero?.skills||hero?.[3]||game.me.getSkills()).filter(skill=>skill.startsWith('fate_')&&!['fate_rage_rule','fate_hand_limit_rule'].includes(skill));
+  for(const [skill,node] of hud.skillNodes) if(!skills.includes(skill)){node.remove();hud.skillNodes.delete(skill);}
+  for(const skill of skills) {
+    let button=hud.skillNodes.get(skill);
+    if(!button) {button=element('button','fate-skill-button',hud.skills);element('span','fate-icon-placeholder',button);element('span','',button,get.translation(skill));button.title=get.translation(`${skill}_info`);button.addEventListener('click',()=>{if(!button.disabled)ui.click.skill(skill);});hud.skillNodes.set(skill,button);}
+    button.disabled=!available.has(skill);
+  }
+  const marks=Array.from(game.me.node.marks.children).slice(1).filter(mark=>mark.name&&mark.classList.contains("mark")&&!isRageMark(mark));
+  const signature=marks.map(mark=>mark.name||mark.skill||mark.textContent).join('|');
+  if(hud.statusSignature!==signature){hud.statusSignature=signature;hud.status.replaceChildren();for(const mark of marks){const chip=element('span','',hud.status);element('i','fate-icon-placeholder',chip);element('span','',chip,get.translation(mark.name||mark.skill||mark.textContent));chip.title=mark.title||chip.textContent;}}
 }

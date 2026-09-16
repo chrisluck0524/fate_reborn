@@ -1,3 +1,5 @@
+import {actionOrder} from './action-order.js';
+import {showFateLauncher,installFateMenu,chooseFateHero} from './launcher.js';
 import { lib, game, ui, get, _status } from "noname";
 import { BASIC_CARD_IMAGES, CARD_DEFINITIONS, CARD_TRANSLATIONS, SPECIAL_SKILLS } from "./cards.js";
 import { EQUIPMENT_DEFINITIONS, EQUIPMENT_SKILLS, EQUIPMENT_TRANSLATIONS } from "./equipment.js";
@@ -7,6 +9,9 @@ import { AGILITY_HERO_CARDS, AGILITY_HERO_SKILLS, AGILITY_HERO_TRANSLATIONS } fr
 import { gainFateRage } from "./rage.js";
 import { ACTIVE_DECK, FATES, FACTION, dealPlayerIdentities, evaluateWinner } from "./rules.js";
 import { FATE_LAYOUT_STYLE, installFateLayout } from "./ui-layout.js";
+
+import { limitCastSkills, castOrder } from "./cast-window.js";
+import { addSkillVoiceInterfaces, heroDeathVoiceTag } from "./voice.js";
 
 export const type = "extension";
 
@@ -48,8 +53,23 @@ const HAND_LIMITS = {
   fate_chen_yunsheng: 5,
 };
 
+/**
+ * Apply the values printed on the Fate hero card after the engine's generic
+ * character initializer has run.  Keeping this explicit prevents a stale
+ * default character (4 HP) from leaking into a newly created seat.
+ */
+function applyFateHeroStats(player, heroId) {
+  const hero = HEROES[heroId];
+  const maxHp = Number(hero?.[2]);
+  if (!player || !Number.isFinite(maxHp) || maxHp <= 0) return;
+
+  player.maxHp = maxHp;
+  player.hp = maxHp;
+  player.storage.fate_hero_id = heroId;
+}
+
 const TEST_CARD_NAMES = Array.from(new Set(ACTIVE_DECK.map(card => card[2])));
-const TEST_IDENTITIES = Object.freeze({ 近卫: FACTION.SENTINEL, 天灾: FACTION.SCOURGE, 中立: FACTION.NEUTRAL });
+const TEST_IDENTITIES = Object.freeze({ 天辉: FACTION.SENTINEL, 夜魇: FACTION.SCOURGE, 中立: FACTION.NEUTRAL });
 
 function selectedCardName(link) {
   if (typeof link === "string") return link;
@@ -60,7 +80,7 @@ function selectedCardName(link) {
 async function chooseTestParticipant(controller, label, pool) {
   const heroResult = await controller.chooseButton(true, [`测试对局：设置${label}的英雄`, [pool, "character"]]).forResult();
   const hero = heroResult.links?.[0] || pool[0];
-  const identityResult = await controller.chooseControl("近卫", "天灾", "中立").set("prompt", `测试对局：设置${label}的身份`).forResult();
+  const identityResult = await controller.chooseControl("天辉", "夜魇", "中立").set("prompt", `测试对局：设置${label}的身份`).forResult();
   const maxHp = HEROES[hero][2];
   const hpResult = await controller
     .chooseControl(...Array.from({ length: maxHp }, (_, index) => `${index + 1}血`))
@@ -108,7 +128,7 @@ async function activateRoshan(player) {
   game.fateReborn.roshanPlayerId = player.playerid;
   game.log(player, "公开了", "#yRoshan附体");
   try {
-    for (const target of game.players.slice()) {
+    for (const target of actionOrder(player,game.players.slice())) {
       if (target !== player && target.isAlive()) await target.die(player);
     }
   } finally {
@@ -149,8 +169,15 @@ const HERO_NAMES = {
 };
 
 for (const [heroId, hero] of Object.entries(HEROES)) {
-  hero[4] = [`ext:fate-reborn/assets/heroes/${heroId}.jpg`];
+  hero[4] = [`ext:fate-reborn/assets/heroes/${heroId}.jpg`, heroDeathVoiceTag(heroId)];
 }
+
+const HERO_SKILL_IDS = new Set(Object.values(HEROES).flatMap(hero => hero[3]).filter(id => !['fate_rage_rule','fate_hand_limit_rule'].includes(id)));
+const HERO_SKILLS = addSkillVoiceInterfaces({
+  ...STRENGTH_HERO_SKILLS,
+  ...INTELLIGENCE_HERO_SKILLS,
+  ...AGILITY_HERO_SKILLS,
+}, HERO_SKILL_IDS);
 
 function playerState(player) {
   const seat = player.getSeatNum?.();
@@ -202,6 +229,7 @@ function createMode(testing = false) {
         for (const cardName of ["sha", "shan", "tao", "wuxie"]) {
           if (lib.card[cardName]) lib.card[cardName].fullskin = false;
         }
+        if (lib.config.fate_standalone) { game.fateLauncherTesting = await showFateLauncher(); installFateMenu(); }
         game.prepareArena(Number.parseInt(get.config("player_number"), 10) || 5);
       },
       async () => {
@@ -217,8 +245,8 @@ function createMode(testing = false) {
         const pool = Object.keys(HEROES);
         let selected;
         let testSetup;
-        let isTesting = testing;
-        if (!testing) {
+        let isTesting = testing || game.fateLauncherTesting;
+        if (!testing && !lib.config.fate_standalone) {
           const modeResult = await game.me
             .chooseControl("标准对局", "测试对局")
             .set("prompt", "选择对局类型")
@@ -232,6 +260,7 @@ function createMode(testing = false) {
           selected = testSetup.hero;
           pool.remove(selected);
           game.me.init(selected);
+          applyFateHeroStats(game.me, selected);
           game.me.identity = testSetup.identity;
           for (let index = 0; index < game.players.length; index += 1) {
             const player = game.players[index];
@@ -239,23 +268,37 @@ function createMode(testing = false) {
             const setup = await chooseTestParticipant(game.me, `AI ${index}`, pool);
             pool.remove(setup.hero);
             player.init(setup.hero);
+            applyFateHeroStats(player, setup.hero);
             player.identity = setup.identity;
             player.storage.fate_test_setup = setup;
           }
         } else {
           const availableHeroes = pool.slice();
-          const result = await game.me
-            .chooseButton(true, ["选择一名宿命英雄（完整英雄池）", [availableHeroes, "character"]])
-            .forResult();
-          selected = result.links?.[0] || availableHeroes[0];
+          if (lib.config.fate_standalone) selected = await chooseFateHero(availableHeroes,HEROES);
+          else {
+            const result = await game.me.chooseButton(true,["选择一名宿命英雄（完整英雄池）",[availableHeroes,"character"]]).forResult();
+            selected=result.links?.[0]||availableHeroes[0];
+          }
           pool.remove(selected);
           game.me.init(selected);
+          applyFateHeroStats(game.me, selected);
           for (let index = 0; index < game.players.length; index += 1) {
             const player = game.players[index];
             if (player === game.me) continue;
             const aiHero = await chooseStandardAiHero(player, `AI ${index}`, pool);
-            if (aiHero) player.init(aiHero);
+            if (aiHero) {
+              player.init(aiHero);
+              applyFateHeroStats(player, aiHero);
+            }
           }
+        }
+
+        // Hero initialization can run after the arena was created.  Reapply
+        // the native seat count once all players exist so a stale saved layout
+        // or a mode switch cannot leave cards at their default origin.
+        if (ui.arena && game.players.length) {
+          ui.arena.setNumber(game.players.length);
+          ui.updatePlayerPositions?.(game.players.length);
         }
 
         for (const neutral of game.players.filter(player => player.identity === FACTION.NEUTRAL)) {
@@ -310,6 +353,9 @@ function createMode(testing = false) {
         // “activate / skip” chooser at the start of every phase.
         event.trigger("gameStart");
         game.fateReborn.firstPlayer = game.players.randomGet();
+        const order = castOrder(game.fateReborn.firstPlayer, game.players);
+        game.fateReborn.actionOrder = order.map(player => player.playerid);
+        order.forEach((player,index) => player.setSeatNum(index + 1));
         // This mode uses async start content, so child events must be awaited.
         // Merely creating them leaves the phase loop outside the active event
         // chain and the table appears to remain at round zero.
@@ -416,6 +462,7 @@ function createMode(testing = false) {
     skill: {
       fate_cast_phase: {
         trigger: { global: "phaseBefore" },
+        filter(event, player) { return event.player === player; },
         forced: true,
         popup: false,
         firstDo: true,
@@ -424,24 +471,16 @@ function createMode(testing = false) {
           // Use an independent event for the cast window.  Re-triggering the
           // live phaseBefore event made its trigger queue wait on itself and
           // left a new game at round zero.
-          const castEvent = game.createEvent("fateCastPhase", false, event);
-          castEvent.player = trigger.player;
-          castEvent.setContent(async current => {
-            await current.trigger(current.name);
-          });
-          await castEvent;
-          const statusEvent = game.createEvent("fateStatusPhase", false, event);
-          statusEvent.player = trigger.player;
-          statusEvent.setContent(async current => {
-            await current.trigger(current.name);
-            const pending = game.fateReborn?.pendingStatuses?.splice(0) || [];
-            for (const status of pending) {
-              const target = game.players.concat(game.dead).find(player => player.playerid === status.targetId);
-              if (!target?.isAlive()) continue;
-              for (const skill of status.skills || []) target.addTempSkill(skill, { global: "phaseAfter" });
-            }
-          });
-          await statusEvent;
+          const participants = new Set();
+          for (const caster of castOrder(trigger.player, game.players)) {
+            if (!caster.isAlive()) continue;
+            const castEvent = game.createEvent("fateCastPhase", false, event);
+            castEvent.player = trigger.player;
+            castEvent.fateCaster = caster;
+            castEvent.fateCastParticipants = participants;
+            castEvent.setContent(async current => { await current.trigger(current.name); });
+            await castEvent;
+          }
         },
       },
       fate_settled_victory_check: {
@@ -459,18 +498,10 @@ function createMode(testing = false) {
         popup: false,
         firstDo: true,
         priority: 100,
-        filter(event, player) {
-          if (player !== game.me || !event.card) return false;
-          return get.type(event.card) === "equip" || (event.name === "respond" && event.card.name === "shan");
-        },
-        async content(event, trigger, player) {
-          const isEquip = get.type(trigger.card) === "equip";
-          const prompt = isEquip
-            ? `确认装备【${get.translation(trigger.card)}】？已有同类装备会被替换。`
-            : "确认使用【闪避】？";
-          const result = await player.chooseBool(prompt).set("choice", true).forResult();
-          if (!result.bool) trigger.cancel();
-        },
+        // Selecting a card and pressing the unified operation bar's confirm
+        // button is already the player's explicit confirmation.  Do not add
+        // a second chooseBool prompt for equipment or responses.
+        filter() { return false; },
       },
       fate_active_skill_prompt: ACTIVE_SKILL_PROMPT,
       fate_ui_layout: {
@@ -485,7 +516,7 @@ function createMode(testing = false) {
     },
     translate: {
       fate_reborn: "宿命",
-      fate_reborn_info: "5—8人标准局：5人时2近卫、2天灾、1中立；8人时3近卫、3天灾、2中立。",
+      fate_reborn_info: "5—8人标准局：5人时2天辉、2夜魇、1中立；8人时3天辉、3夜魇、2中立。",
       fate_reborn_test: "宿命测试",
       fate_reborn_test_info: "选择英雄、身份、血量、怒气与起始手牌，胜负检查关闭。",
       fate_cast_phase: "施法阶段",
@@ -493,15 +524,15 @@ function createMode(testing = false) {
       fate_settled_victory_check: "宿命检查",
       fate_settled_victory_check_info: "一次用牌或一个回合结算完成后检查宿命及阵营胜利。",
       fate_card_confirmation: "使用确认",
-      fate_card_confirmation_info: "使用装备牌或打出闪避前，需要再次确认。",
+      fate_card_confirmation_info: "使用统一操作条确认牌的使用。",
       fate_active_skill_prompt: "主动技能",
       fate_active_skill_prompt_info: "你的出牌阶段开始时，可选择发动当前英雄已实现的主动技能。",
-      fate_sentinel: "近卫",
-      fate_sentinel2: "近卫阵营",
-      fate_sentinel_bg: "卫",
-      fate_scourge: "天灾",
-      fate_scourge2: "天灾阵营",
-      fate_scourge_bg: "灾",
+      fate_sentinel: "天辉",
+      fate_sentinel2: "天辉阵营",
+      fate_sentinel_bg: "辉",
+      fate_scourge: "夜魇",
+      fate_scourge2: "夜魇阵营",
+      fate_scourge_bg: "魇",
       fate_neutral: "中立",
       fate_neutral2: "中立阵营",
       fate_neutral_bg: "中",
@@ -516,50 +547,24 @@ export default function fateRebornExtension() {
     connect: false,
     content() {},
     precontent() {
-      document.title = "宿命 Reborn";
       document.documentElement.classList.add("fate-standalone");
       const standaloneStyle = document.createElement("style");
       standaloneStyle.id = "fate-reborn-standalone-style";
       standaloneStyle.textContent = `
-        .fate-standalone #splash > div {
-          width: min(82vw, 920px);
-          height: min(68vw, 768px);
-          max-height: 78vh;
-          top: 50%;
-          margin: 0;
-          transform: translateY(-50%);
-          box-shadow: 0 14px 48px rgba(0,0,0,.72);
-        }
-        .fate-standalone #splash > div > .avatar { width: calc(100% - 10px); }
-        .fate-standalone #splash > div > .splashtext { display: none; }
-        .fate-standalone #splash > div::after {
-          content: "点击进入游戏";
-          position: absolute;
-          left: 50%;
-          bottom: 5.5%;
-          z-index: 2;
-          transform: translateX(-50%);
-          padding: 10px 28px;
-          border: 1px solid rgba(226,194,115,.9);
-          border-radius: 4px;
-          color: #fff0bd;
-          background: rgba(8,16,25,.82);
-          font: 600 20px/1.2 serif;
-          letter-spacing: 5px;
-          text-shadow: 0 2px 6px #000;
-          white-space: nowrap;
-        }
-        .fate-standalone #splash:not(.touch) > div:hover:not(.clicked) { transform: translateY(calc(-50% - 8px)); }
-        .fate-standalone #splash > div.hidden { transform: translateY(calc(-50% - 280px)) scale(.86); }
-        .fate-standalone #splash > div.clicked { transform: translateY(-50%) scale(1.05); opacity: 0; }
-        .fate-standalone .menu-tab > div:nth-child(n+4),
-        .fate-standalone .new-menu-tab > div:nth-child(n+4) { display: none !important; }
         .card.fate_chaos.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_chaos_attack.jpg") !important; }
         .card.fate_fire.fullimage { background-image: url("extension/fate-reborn/assets/cards/fate_fire_attack.jpg") !important; }
         ${FATE_LAYOUT_STYLE}
       `;
       document.head.appendChild(standaloneStyle);
       game.fateInstallLayout = installFateLayout;
+      if (!game.fateOriginalSeatSort) {
+        game.fateOriginalSeatSort=lib.sort.seat;
+        lib.sort.seat=(a,b)=>{
+          if(!game.fateReborn) return game.fateOriginalSeatSort(a,b);
+          const order=actionOrder(lib.tempSortSeat || _status.event?.player || _status.currentPhase || game.me,game.players.concat(game.dead));
+          return order.indexOf(a)-order.indexOf(b);
+        };
+      }
       game.addNature("fate_chaos", "混乱", { linked: false, order: 5, color: "#7d5ba6" });
       game.addNature("fate_fire", "火焰", { linked: false, order: 6, color: "#b64a35" });
       game.addGroup("fate_strength", "力", "力量", { color: "#a33" });
@@ -607,9 +612,7 @@ export default function fateRebornExtension() {
         skill: {
           ...SPECIAL_SKILLS,
           ...EQUIPMENT_SKILLS,
-          ...STRENGTH_HERO_SKILLS,
-          ...INTELLIGENCE_HERO_SKILLS,
-          ...AGILITY_HERO_SKILLS,
+          ...limitCastSkills(HERO_SKILLS),
           fate_rage_rule: {
             mark: true,
             marktext: "怒",

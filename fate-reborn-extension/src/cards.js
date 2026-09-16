@@ -1,3 +1,4 @@
+import {actionOrder,orderedTargets} from './action-order.js';
 import { lib, game, ui, get } from "noname";
 import { S_RAGE_COST } from "./rules.js";
 import { gainFateRage } from "./rage.js";
@@ -64,13 +65,13 @@ export const CARD_DEFINITIONS = {
   fate_chakra: {
     type: "trick",
     enable: true,
-    selectTarget: -1,
-    toself: true,
+    selectTarget: 1,
     filterTarget(card, player, target) {
-      return player === target;
+      return player === target || player.hasSkill("fate_keeper_favor");
     },
     async content(event, trigger, player) {
-      await player.draw();
+      const beneficiary=event.target;
+      await beneficiary.draw();
       let keepGuessing = true;
       while (keepGuessing) {
         const guess = await player
@@ -80,9 +81,9 @@ export const CARD_DEFINITIONS = {
           .forResult();
         const revealed = get.cards(1);
         if (!revealed.length) break;
-        player.showCards(revealed, "查克拉展示");
+        beneficiary.showCards(revealed, "查克拉展示");
         const matched = get.color(revealed[0], false) === (guess.control === "红色" ? "red" : "black");
-        if (matched) await player.gain(revealed, "gain2");
+        if (matched) await beneficiary.gain(revealed, "gain2");
         else {
           await game.cardsDiscard(revealed);
           keepGuessing = false;
@@ -101,13 +102,8 @@ export const CARD_DEFINITIONS = {
       const clockwise = pathTo(player, event.target, "next");
       const counterClockwise = pathTo(player, event.target, "previous");
       let targets;
-      if (clockwise.length === counterClockwise.length) {
-        const choice = await player
-          .chooseControl("顺时针", "逆时针")
-          .set("prompt", "野性之斧：两条路径等长，请选择结算方向")
-          .forResult();
-        targets = choice.control === "逆时针" ? counterClockwise : clockwise;
-      } else targets = clockwise.length < counterClockwise.length ? clockwise : counterClockwise;
+      targets = clockwise.length < counterClockwise.length ? clockwise : counterClockwise;
+      targets = orderedTargets(player,game.players,targets);
       for (const target of targets) {
         if (!target.isAlive()) continue;
         const result = await target
@@ -163,8 +159,7 @@ export const CARD_DEFINITIONS = {
       return player === target;
     },
     async content(event, trigger, player) {
-      const recipients = game.players.slice();
-      recipients.sortBySeat(player);
+      const recipients = actionOrder(player,game.players);
       const cards = get.cards(recipients.length);
       if (!cards.length) return;
       await game.cardsGotoOrdering(cards);

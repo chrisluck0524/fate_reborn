@@ -1,8 +1,38 @@
 diff --git a/apps/core/card/standard.js b/apps/core/card/standard.js
-index aa8ee75..46e9707 100644
+index aa8ee75..c95e478 100644
 --- a/apps/core/card/standard.js
 +++ b/apps/core/card/standard.js
-@@ -4330,7 +4330,7 @@ export default {
+@@ -156,7 +156,7 @@ export default {
+ 				};
+ 				const isShaned = result => result?.bool && result.result === "shaned";
+ 				const chooseShan = async () => {
+-					if (event.directHit || event.directHit2 || (!_status.connectMode && lib.config.skip_shan && !target.hasShan())) {
++					if (event.directHit || event.directHit2 || (!_status.connectMode && lib.config.skip_shan && !lib.config.fate_standalone && !target.hasShan())) {
+ 						return { bool: false };
+ 					}
+ 					if (event.skipShan) {
+@@ -168,7 +168,8 @@ export default {
+ 						if (get.name(card) !== "shan") {
+ 							return false;
+ 						}
+-						return lib.filter.cardEnabled(card, player, "forceEnable");
++						if (get.event().respondTo?.[1]?.storage?.fateDiamondDodge && get.suit(card)!=="diamond") return false;
++                        return lib.filter.cardEnabled(card, player, "forceEnable");
+ 					});
+ 					if (event.shanRequired > 1) {
+ 						next.set("prompt2", `（共需使用${event.shanRequired}张闪）`);
+@@ -3133,6 +3134,10 @@ export default {
+ 					triggerEvent.untrigger("currentOnly");
+ 					triggerEvent.cancelled = true;
+ 				} else {
++                    if(game.fateReborn && triggerEvent.card?.name!=="wuxie") {
++                        const original=triggerEvent.getParent("useCard");
++                        if(original) {original.fateDispelledBy ||= []; if(!original.fateDispelledBy.includes(player.playerid)) original.fateDispelledBy.push(player.playerid);}
++                    }
+ 					triggerEvent.neutralize();
+ 					if (event.getParent().guowuxie === true) {
+ 						triggerEvent.getParent().excluded.addArray(game.filterPlayer(current => current.isFriendOf(triggerEvent.target)));
+@@ -4330,7 +4335,7 @@ export default {
  							prompt += `使用的${get.translation(evtmap.card)}`;
  							prompt += `即将${state > 0 ? "生" : "失"}效。`;
  						}
@@ -11,19 +41,38 @@ index aa8ee75..46e9707 100644
  						if (player.isUnderControl(true) && !_status.auto && !ui.tempnowuxie && map.tempnowuxie) {
  							let translation = get.translation(map.card.name);
  							if (translation.length >= 4) {
+@@ -4484,7 +4489,17 @@ export default {
+ 						event.id = get.id();
+ 					}
+ 					map.id = event.id;
+-					list.sortBySeat(_status.currentPhase);
++					if (game.fateReborn?.turnDirection === "counterclockwise") {
++                        const order = [], seen = new Set();
++                        let current = _status.currentPhase || map.player;
++                        while (current && !seen.has(current)) {
++                            seen.add(current); order.push(current);
++                            current = current.previousSeat || current.previous;
++                        }
++                        list.sort((a, b) => order.indexOf(a) - order.indexOf(b));
++                    } else {
++                        list.sortBySeat(_status.currentPhase);
++                    }
+ 				},
+ 				async (event, trigger, player, result) => {
+ 					if (event.list.length === 0) {
+@@ -4814,6 +4829,7 @@ export default {
+ 						}
+ 					};
+ 					event.settle=function(){
++
+ 						if(event.respondWuxie) event.trigger('eventNeutralized');
+ 						if(!event.state){
+ 							if(event.triggername=='phaseJudge'){
 diff --git a/apps/core/game/config.json b/apps/core/game/config.json
-index 40ba397..087a237 100644
+index 40ba397..5c6da64 100644
 --- a/apps/core/game/config.json
 +++ b/apps/core/game/config.json
-@@ -129,6 +129,7 @@
- 	"show_statusbar_android": false,
- 	"show_name": true,
- 	"show_replay": false,
-+	"show_splash": "always",
- 	"show_round_menu": true,
- 	"show_pause": true,
- 	"show_auto": true,
-@@ -216,14 +217,17 @@
+@@ -216,14 +216,17 @@
  	"connect_characters": ["diy"],
  	"connect_cards": ["huodong", "guozhan", "sp", "zhulu", "yingbian", "yongjian", "xianxia"],
  	"plays": [],
@@ -56,153 +105,59 @@ index ded7ad3..d3c9060 100644
  	<script>
  		"use strict";
  		(() => {
-diff --git a/apps/core/noname/entry.ts b/apps/core/noname/entry.ts
-index eb397bf..0876bde 100644
---- a/apps/core/noname/entry.ts
-+++ b/apps/core/noname/entry.ts
-@@ -31,15 +31,15 @@ import "vue/dist/vue.esm-browser.js";
- 		await preload({ lib, game, get, _status, ui, ai });
- 		lib.buildInfo = await loadBuildInfo(url => lib.init.promises.json(url));
- 
--		// GPL确认
-+		// 宿命 Reborn 的开源许可确认
- 		if (!localStorage.getItem("gplv3_noname_alerted")) {
- 			if (
--				confirm(`①无名杀是一款基于GPLv3协议的开源软件
--你可以在遵守GPLv3协议的基础上任意使用，修改并转发《无名杀》，以及所有基于《无名杀》开发的扩展
--点击“确定”即代表您认可并接受GPLv3协议↓️
-+				confirm(`欢迎试玩《宿命 Reborn》。
-+
-+本试玩版基于 libnoname/noname 开源引擎开发，并依照 GPLv3 协议提供。点击“确定”即代表您知悉并接受该协议：
- https://www.gnu.org/licenses/gpl-3.0.html
--②无名杀官方发布地址仅有GitHub仓库
--其他所有的所谓“无名杀”社群（包括但不限于绝大多数“官方”QQ群、QQ频道等）均为玩家自发组织，与无名杀官方无关`)
-+
-+引擎源代码：https://github.com/libnoname/noname`)
- 			) {
- 				localStorage.setItem("gplv3_noname_alerted", String(true));
- 			} else {
-@@ -51,7 +51,7 @@ https://www.gnu.org/licenses/gpl-3.0.html
- 		await boot();
- 	} catch (e) {
- 		console.error(e);
--		alert(`《无名杀》加载内容失败
-+		alert(`《宿命 Reborn》加载内容失败
- 浏览器UA信息: 
- ${userAgentLowerCase}
- 错误信息: 
-@@ -60,7 +60,6 @@ ${e instanceof Error ? e.stack : String(e)}
- 1. 游戏文件是否完整（重新下载完整包）
- 2. 客户端是否需要更新
- 3. 浏览器是否需要更新
--4. 若您直接打开index.html进行游戏，请改为运行文件夹内的noname-server.exe
--5. 若以上步骤均无法解决问题，请及时向开发组反馈`);
-+4. 若以上步骤均无法解决问题，请将错误信息反馈给开发者`);
- 	}
- })();
-diff --git a/apps/core/noname/get/index.js b/apps/core/noname/get/index.js
-index 8614c06..34bc54e 100644
---- a/apps/core/noname/get/index.js
-+++ b/apps/core/noname/get/index.js
-@@ -4111,6 +4111,12 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
- 			return str2;
- 		}
- 		if (arg == "skill") {
-+			// Fate Reborn's standalone client uses the complete skill name in all
-+			// skill-choice and skill-intro surfaces.  Other modes keep the engine's
-+			// traditional two-character skill labels.
-+			if (lib.config.fate_standalone && lib.translate[str]) {
-+				return lib.translate[str];
-+			}
- 			if (lib.translate[str + "_ab"]) {
- 				return lib.translate[str + "_ab"];
- 			}
-@@ -4968,7 +4974,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
- 				} else {
- 					opacity = "";
- 				}
--				var skilltrans = get.translation(skills[i]).slice(0, 2);
-+				var skilltrans = lib.config.fate_standalone ? get.translation(skills[i]) : get.translation(skills[i]).slice(0, 2);
- 				str += '<div class="skill" style="' + opacity + '">【' + skilltrans + '】</div><div style="' + opacity + '">' + get.skillInfoTranslation(skills[i], null, false) + '</div><div style="display:block;height:10px"></div>';
- 			}
- 		}
-@@ -5288,7 +5294,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
- 					} else {
- 						translation = get.translation(skills[i]);
- 						if (!lib.skill[skills[i]].nobracket) {
--							translation = `【${translation.slice(0, 2)}】`;
-+							translation = `【${lib.config.fate_standalone ? translation : translation.slice(0, 2)}】`;
- 						}
- 					}
- 
-@@ -6108,7 +6114,7 @@ else if (entry[1] !== void 0) stringifying[key] = JSON.stringify(entry[1]);*/
- 						} else {
- 							translation = get.translation(skills[i]);
- 							if (!lib.skill[skills[i]].nobracket) {
--								translation = `【${translation.slice(0, 2)}】`;
-+								translation = `【${lib.config.fate_standalone ? translation : translation.slice(0, 2)}】`;
- 							}
- 						}
- 
 diff --git a/apps/core/noname/init/index.ts b/apps/core/noname/init/index.ts
-index 07358a6..526ea46 100644
+index 07358a6..88029a5 100644
 --- a/apps/core/noname/init/index.ts
 +++ b/apps/core/noname/init/index.ts
-@@ -872,6 +872,14 @@ async function loadConfig() {
+@@ -328,6 +328,7 @@ export async function boot() {
+ 			show_splash = true;
+ 			break;
+ 	}
++	if (config.get("fate_standalone")) show_splash = false;
+ 	localStorage.removeItem("show_splash_off");
+ 
+ 	if (localStorage.getItem(`${lib.configprefix}playback`)) {
+@@ -872,6 +873,17 @@ async function loadConfig() {
  		}
  	}
  
-+	// 独立试玩版固定进入宿命，并始终展示宿命启动封面。
++	// 独立试玩版固定进入宿命并启用宿命扩展。
 +	if (config.get("fate_standalone")) {
 +		config.set("mode", "fate_reborn");
-+		config.set("show_splash", "always");
 +		config.set("extensions", ["fate-reborn"]);
 +		config.set("extension_fate-reborn_enable", true);
++		// The standalone build owns its table layout.  A layout saved by an
++		// older build (especially `default`) uses larger player cards and makes
++		// the eight-seat arrangement overlap on the demo window.
++		config.set("layout", "long2");
 +	}
 +
  	config.get("all").characters = [];
  	config.get("all").cards = [];
  	config.get("all").plays = [];
-diff --git a/apps/core/noname/init/onload/OnloadSplash.vue b/apps/core/noname/init/onload/OnloadSplash.vue
-index d36521a..9c2aa1f 100644
---- a/apps/core/noname/init/onload/OnloadSplash.vue
-+++ b/apps/core/noname/init/onload/OnloadSplash.vue
-@@ -1,7 +1,7 @@
- <template>
-   <div
-     class="hidden"
--    v-for="(mode, index) in lib.config.all.mode"
-+    v-for="(mode, index) in displayedModes"
-     :key="mode"
-     :link="mode"
-     :index="index"
-@@ -15,7 +15,7 @@
- </template>
- 
- <script setup lang="ts">
--import { ref, onMounted } from "vue";
-+import { computed, ref, onMounted } from "vue";
- import { lib, get } from "noname";
- import { delay } from "@/util/index.js";
- 
-@@ -26,6 +26,12 @@ interface Props {
- 
- const props = defineProps<Props>();
- 
-+const displayedModes = computed(() =>
-+  lib.config.fate_standalone
-+    ? (lib.config.all.mode.includes("fate_reborn") ? ["fate_reborn"] : [])
-+    : lib.config.all.mode,
-+);
-+
- const nodeList = ref<HTMLElement[]>([]);
- let clicked = false;
- 
 diff --git a/apps/core/noname/library/element/content.ts b/apps/core/noname/library/element/content.ts
-index 0d03296..bd0dd5f 100644
+index 0d03296..6851e4c 100644
 --- a/apps/core/noname/library/element/content.ts
 +++ b/apps/core/noname/library/element/content.ts
-@@ -3807,8 +3807,14 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+@@ -3671,7 +3671,7 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 			}
+ 
+ 			player._start_cards = player.getCards("h");
+-			player = player.next;
++			player = game.fateReborn?.turnDirection === "counterclockwise" ? player.previous : player.next;
+ 		} while (player != end);
+ 
+ 		event.changeCard = get.config("change_card");
+@@ -3769,7 +3769,7 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 		let current = player;
+ 		while (current.getSeatNum() === 0) {
+ 			current.setSeatNum(num);
+-			current = current.next;
++			current = game.fateReborn?.turnDirection === "counterclockwise" ? current.previous : current.next;
+ 			num++;
+ 		}
+ 		while (true) {
+@@ -3807,6 +3807,12 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
  					.concat(game.dead)
  					.sort((a, b) => parseInt(a.dataset.position) - parseInt(b.dataset.position));
  				const position = parseInt(current.dataset.position);
@@ -215,202 +170,59 @@ index 0d03296..bd0dd5f 100644
  				for (const player of players) {
  					if (parseInt(player.dataset.position) > position) {
  						return player;
- 					}
- 				}
-@@ -7332,10 +7332,12 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
- 			for (const skill of list) {
- 				if (lib.translate[`${skill}_info`]) {
- 					let translation = get.translation(skill);
--					if (translation[0] == "新" && translation.length == 3) {
--						translation = translation.slice(1, 3);
--					} else {
--						translation = translation.slice(0, 2);
-+					if (!lib.config.fate_standalone) {
-+						if (translation[0] == "新" && translation.length == 3) {
-+							translation = translation.slice(1, 3);
-+						} else {
-+							translation = translation.slice(0, 2);
-+						}
- 					}
- 					const item = dialog.add(`<div class="popup pointerdiv" style="width:80%;display:inline-block"><div class="skill">【${translation}】</div><div>${lib.translate[`${skill}_info`]}</div></div>`);
- 					item.firstChild.addEventListener("click", clickItem(skill));
-diff --git a/apps/core/noname/ui/create/index.js b/apps/core/noname/ui/create/index.js
-index 44b0236..8490f67 100644
---- a/apps/core/noname/ui/create/index.js
-+++ b/apps/core/noname/ui/create/index.js
-@@ -2627,7 +2627,7 @@ export class Create {
+@@ -12906,6 +12912,7 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 	},
+ 	judge: [
+ 		async (event, trigger, player) => {
++			if (game.fateReborn) await event.trigger("fateJudgeBeforeReveal");
+ 			const judgestr = `${get.translation(player)}的${event.judgestr}判定`;
+ 			event.videoId = lib.status.videoId++;
+ 			let cardj = event.directresult;
+@@ -13015,6 +13022,7 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 			ui.arena.classList.remove("thrownhighlight");
+ 			game.log(player, "的判定结果为", event.result.card);
+ 			const triggerFixing = event.trigger("judgeFixing");
++			if (game.fateReborn) await triggerFixing;
+ 			let callback = null;
+ 			if (event.callback) {
+ 				const next = game.createEvent("judgeCallback", false);
+@@ -13104,7 +13112,7 @@ export const Content: Record<string, ContentFuncByAll | ContentFuncsByAll> = {
+ 				const top = [];
+ 				switch (name) {
+ 					case "phaseJieshu":
+-						target = target.next;
++						target = game.fateReborn?.turnDirection === "counterclockwise" ? target.previous : target.next;
+ 					// [falls through]
+ 					case "phaseZhunbei": {
+ 						const att = get.sgn(get.attitude(player, target));
+diff --git a/apps/core/noname/library/element/gameEvent.ts b/apps/core/noname/library/element/gameEvent.ts
+index b803e95..1a736c8 100644
+--- a/apps/core/noname/library/element/gameEvent.ts
++++ b/apps/core/noname/library/element/gameEvent.ts
+@@ -627,7 +627,7 @@ export class GameEvent implements PromiseLike<void> {
+ 			delete doing.listAdded;
+ 			delete doing.addList;
+ 			doingList.push(doing);
+-			player = player.nextSeat;
++			player = game.fateReborn?.turnDirection === "counterclockwise" ? player.previousSeat : player.nextSeat;
+ 		} while (player && player !== start);
+ 		doingList.unshift(firstDo);
+ 		doingList.push(lastDo);
+diff --git a/apps/core/noname/library/hooks/index.ts b/apps/core/noname/library/hooks/index.ts
+index f67edde..c054c37 100644
+--- a/apps/core/noname/library/hooks/index.ts
++++ b/apps/core/noname/library/hooks/index.ts
+@@ -212,6 +212,8 @@ export const defaultHooks: {
  
- 		ui.replay = ui.create.system("重来", game.reload, true);
- 		ui.replay.id = "restartbutton";
--		ui.config2 = ui.create.system("选项", ui.click.config);
-+		ui.config2 = ui.create.system(lib.config.fate_standalone ? "菜单" : "选项", ui.click.config);
- 		ui.pause = ui.create.system("暂停", ui.click.pause);
- 		ui.pause.id = "pausebutton";
- 		if (!_status.video) {
-@@ -2928,7 +2928,7 @@ export class Create {
- 		);
- 
- 		lib.arenaReady?.push(function () {
--			if (lib.config.show_deckMonitor && !_status.connectMode) {
-+			if (!lib.config.fate_standalone && lib.config.show_deckMonitor && !_status.connectMode) {
- 				ui.deckMonitor.style.display = "";
- 				/*if (_status.connectMode && !lib.config.show_deckMonitor_online) {
- 					ui.deckMonitor.style.display = "none";
-@@ -2953,6 +2953,11 @@ export class Create {
- 		if (!lib.config.show_playerids || !game.showIdentity) {
- 			ui.playerids.style.display = "none";
- 		}
-+		// 独立试玩版不显示无名杀的记牌器和身份揭示工具。
-+		if (lib.config.fate_standalone) {
-+			ui.deckMonitor.style.display = "none";
-+			ui.playerids.style.display = "none";
-+		}
- 		if (!lib.config.show_replay) {
- 			ui.replay.style.display = "none";
- 		}
-diff --git a/apps/core/noname/ui/create/menu/index.js b/apps/core/noname/ui/create/menu/index.js
-index fe4e877..e6b5433 100644
---- a/apps/core/noname/ui/create/menu/index.js
-+++ b/apps/core/noname/ui/create/menu/index.js
-@@ -424,6 +424,7 @@ export const menuUpdates = [];
- export function menu(connectMenu) {
- 	/** 提示重启的计时器 */
- 	let menuTimeout = null;
-+	const fateStandalone = !connectMenu && lib.config.fate_standalone;
- 	if (!connectMenu && !game.syncMenu) {
- 		menuTimeout = setTimeout(lib.init.reset, 1000);
- 	}
-@@ -467,7 +468,7 @@ export function menu(connectMenu) {
- 				clickContainer.call(cacheMenuContainer, connectMenu);
+ 	checkEnd: [
+ 		function autoConfirm(event, { ok, auto, autoConfirm }) {
++			// 宿命的牌与目标统一由 HUD 操作条确认，避免引擎选满后抢先提交。
++			if (lib.config.fate_standalone && game.me?.name && event.isMine?.() && ["chooseToUse", "chooseToRespond", "chooseCard", "chooseTarget", "chooseCardTarget", "chooseToDiscard", "choosePlayerCard"].includes(event.name)) return;
+ 			if (!event.isMine()) {
+ 				return;
  			}
- 		};
--		menux = createMenu(connectMenu, ["开始", "选项", "武将", "卡牌", "扩展", "其它"], {
-+		menux = createMenu(connectMenu, fateStandalone ? ["开始"] : ["开始", "选项", "武将", "卡牌", "扩展", "其它"], {
- 			position: cacheMenuContainer,
- 			bar: 40,
- 		});
-@@ -517,22 +518,24 @@ export function menu(connectMenu) {
- 	// 开始
- 	let startButton = ui.create.startMenu(connectMenu);
- 
--	// 选项
--	ui.create.optionsMenu(connectMenu);
-+	if (!fateStandalone) {
-+		// 选项
-+		ui.create.optionsMenu(connectMenu);
- 
--	// 武将
--	let updateCharacterPackMenu = ui.create.characterPackMenu(connectMenu);
--	ui.updateCharacterPackMenu.push(updateCharacterPackMenu);
-+		// 武将
-+		let updateCharacterPackMenu = ui.create.characterPackMenu(connectMenu);
-+		ui.updateCharacterPackMenu.push(updateCharacterPackMenu);
- 
--	// 卡牌
--	let updatecardPackMenu = ui.create.cardPackMenu(connectMenu);
--	ui.updateCardPackMenu.push(updatecardPackMenu);
-+		// 卡牌
-+		let updatecardPackMenu = ui.create.cardPackMenu(connectMenu);
-+		ui.updateCardPackMenu.push(updatecardPackMenu);
- 
--	// 扩展
--	ui.create.extensionMenu(connectMenu);
-+		// 扩展
-+		ui.create.extensionMenu(connectMenu);
- 
--	// 其他
--	ui.create.otherMenu(connectMenu);
-+		// 其他
-+		ui.create.otherMenu(connectMenu);
-+	}
- 
- 	if (menuTimeout) {
- 		clearTimeout(menuTimeout);
-diff --git a/apps/core/noname/ui/create/menu/new.js b/apps/core/noname/ui/create/menu/new.js
-index 715b1fe..1c20754 100644
---- a/apps/core/noname/ui/create/menu/new.js
-+++ b/apps/core/noname/ui/create/menu/new.js
-@@ -32,6 +32,16 @@ export const defaultTemplate = {
- 		connectMenu: Boolean,
- 	},
- 	data() {
-+		const tabs = lib.config.fate_standalone
-+			? [[startMenutabName, startMenuData]]
-+			: [
-+					[startMenutabName, startMenuData],
-+					["选项", startMenuData],
-+					["武将", startMenuData],
-+					["卡牌", startMenuData],
-+					["扩展", startMenuData],
-+					["其它", startMenuData],
-+				];
- 		return {
- 			tabName: null,
- 			rightPaneData: {
-@@ -42,14 +52,7 @@ export const defaultTemplate = {
- 			/**
- 			 * @type { Map<string, menuData> }
- 			 */
--			tabDataMap: new Map([
--				[startMenutabName, startMenuData],
--				["选项", startMenuData],
--				["武将", startMenuData],
--				["卡牌", startMenuData],
--				["扩展", startMenuData],
--				["其它", startMenuData],
--			]),
-+			tabDataMap: new Map(tabs),
- 		};
- 	},
- 	methods: {
-diff --git a/apps/core/noname/ui/create/menu/pages/startMenu.js b/apps/core/noname/ui/create/menu/pages/startMenu.js
-index b533fc9..2de543f 100644
---- a/apps/core/noname/ui/create/menu/pages/startMenu.js
-+++ b/apps/core/noname/ui/create/menu/pages/startMenu.js
-@@ -244,7 +244,7 @@ export const startMenu = function (connectMenu) {
- 						hiddenNodes.push(cfgnode);
- 					}
- 				}
--				if (!connectMenu) {
-+				if (!connectMenu && !lib.config.fate_standalone) {
- 					var move = ui.create.div(".auto-hide.config", '<div style="margin-right:10px" class="pointerdiv">上移↑</div><div class="pointerdiv">下移↓</div>');
- 					move.firstChild.listen(function () {
- 						if (node.previousSibling) {
-@@ -308,7 +308,7 @@ export const startMenu = function (connectMenu) {
- 				} else {
- 					hasexpand = false;
- 				}
--				if (!connectMenu) {
-+				if (!connectMenu && !lib.config.fate_standalone) {
- 					var hidemode = ui.create.div(".config.pointerspan", "<span>隐藏此模式</span>", page, function () {
- 						if (this.firstChild.innerHTML == "隐藏此模式") {
- 							this.firstChild.innerHTML = "此模式将在重启后隐藏";
-@@ -350,6 +350,9 @@ export const startMenu = function (connectMenu) {
- 		modeorder.add(i);
- 	}
- 	for (var i = 0; i < modeorder.length; i++) {
-+		if (lib.config.fate_standalone && !["fate_reborn", "fate_reborn_test"].includes(modeorder[i])) {
-+			continue;
-+		}
- 		if (connectMenu) {
- 			if (!lib.mode[modeorder[i]].connect) {
- 				continue;
-diff --git a/apps/core/noname/ui/create/menu/startMenu.js b/apps/core/noname/ui/create/menu/startMenu.js
-index 6288821..13c3ecd 100644
---- a/apps/core/noname/ui/create/menu/startMenu.js
-+++ b/apps/core/noname/ui/create/menu/startMenu.js
-@@ -24,6 +24,9 @@ export const startMenuData = {
- 			modeorder.add(i);
- 		}
- 		const leftPaneNames = modeorder.filter(mode => {
-+			if (lib.config.fate_standalone && !["fate_reborn", "fate_reborn_test"].includes(mode)) {
-+				return false;
-+			}
- 			if (connectMenu) {
- 				if (!lib.mode[mode].connect) {
- 					return;
 diff --git a/apps/electron/app/main.ts b/apps/electron/app/main.ts
-index 7a0a6dd..1c2c485 100644
+index 7a0a6dd..e269122 100644
 --- a/apps/electron/app/main.ts
 +++ b/apps/electron/app/main.ts
 @@ -19,10 +19,10 @@ if (!gotTheLock) {
@@ -427,7 +239,30 @@ index 7a0a6dd..1c2c485 100644
  
  function setPath(path1: any, path2: any) {
  	app.getPath(path1);
-@@ -42,7 +42,7 @@ setPath("logs", path.join(dirname, "Home", "logs"));
+@@ -30,19 +30,23 @@ function setPath(path1: any, path2: any) {
+ 	app.setPath(path1, path2);
+ }
+ 
+-setPath("home", path.join(dirname, "Home"));
+-setPath("appData", path.join(dirname, "Home", "AppData"));
+-setPath("userData", path.join(dirname, "Home", "UserData"));
+-setPath("temp", path.join(dirname, "Home", "Temp"));
+-setPath("cache", path.join(dirname, "Home", "Cache"));
++// The application resources may be inside a read-only DMG. Keep all mutable
++// Electron data in the user's Application Support directory instead of next
++// to the bundled files.
++const writableRoot = path.join(app.getPath("appData"), "宿命Reborn试玩版");
++setPath("home", path.join(writableRoot, "Home"));
++setPath("appData", path.join(writableRoot, "Home", "AppData"));
++setPath("userData", path.join(writableRoot, "Home", "UserData"));
++setPath("temp", path.join(writableRoot, "Home", "Temp"));
++setPath("cache", path.join(writableRoot, "Home", "Cache"));
+ //崩溃转储文件存储的目录
+-setPath("crashDumps", path.join(dirname, "Home", "crashDumps"));
++setPath("crashDumps", path.join(writableRoot, "Home", "crashDumps"));
+ //日志目录
+-setPath("logs", path.join(dirname, "Home", "logs"));
++setPath("logs", path.join(writableRoot, "Home", "logs"));
  
  //崩溃处理
  crashReporter.start({
@@ -436,7 +271,7 @@ index 7a0a6dd..1c2c485 100644
  	//崩溃报告将被收集并存储在崩溃目录中，不会上传
  	uploadToServer: false,
  	compress: false,
-@@ -63,7 +63,7 @@ app.on("open-url", (event, urlStr) => {
+@@ -63,22 +67,45 @@ app.on("open-url", (event, urlStr) => {
  
  app.setAboutPanelOptions({
  	iconPath: "noname.ico",
@@ -445,18 +280,86 @@ index 7a0a6dd..1c2c485 100644
  });
  
  process.env["ELECTRON_DEFAULT_ERROR_MODE"] = "true";
-@@ -78,7 +78,7 @@ function createMainWindow() {
+ process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = "true";
+ process.noDeprecation = true;
+ 
+-function createWindow() {
+-	createMainWindow();
++async function waitForServer(url: string, timeoutMs = 15_000) {
++	const deadline = Date.now() + timeoutMs;
++	while (Date.now() < deadline) {
++		try {
++			const response = await fetch(url, { cache: "no-store" });
++			if (response.ok) return;
++		} catch {
++			// The fs server starts asynchronously; retry until it is ready.
++		}
++		await new Promise(resolve => setTimeout(resolve, 100));
++	}
++	throw new Error(`本地资源服务启动超时：${url}`);
++}
++
++async function createWindow() {
++	try {
++		await createMainWindow();
++	} catch (error) {
++		console.error("创建主窗口失败", error);
++		dialog.showErrorBox("宿命 Reborn 启动失败", String(error));
++	}
+ }
+ 
+-function createMainWindow() {
++async function createMainWindow() {
++	const pageUrl = import.meta.env.DEV ? "http://localhost:8080" : "http://127.0.0.1:8089/index.html";
++	await waitForServer("http://127.0.0.1:8089/index.html");
  	let win = new BrowserWindow({
 -		width: 1000,
-+		width: 1500,
 -		height: 800,
-+		height: 900,
 -		title: "无名杀",
++		width: 1500,
++		height: 900,
++		show: false,
++		backgroundColor: "#2b2422",
 +		title: "宿命 Reborn 试玩版",
  		icon: path.join(dirname, "noname.ico"),
  		webPreferences: {
  			webSecurity: false,
-@@ -104,7 +104,7 @@ function createMainWindow() {
+@@ -93,18 +120,37 @@ function createMainWindow() {
+ 			experimentalFeatures: true, //启用Chromium的实验功能
+ 		},
+ 	});
+-	if (import.meta.env.DEV) {
+-		win.loadURL(`http://localhost:8080`);
+-	} else {
+-		win.loadURL(`http://localhost:8089/index.html`);
+-	}
++	let shown = false;
++	const revealWindow = () => {
++		if (!shown && !win.isDestroyed()) {
++			shown = true;
++			win.show();
++		}
++	};
++	win.webContents.once("did-finish-load", revealWindow);
++	// Keep a visible window if a broken resource prevents did-finish-load.
++	setTimeout(revealWindow, 20_000);
++	let retries = 0;
++	const loadPage = () => {
++		void win.loadURL(pageUrl).catch(error => {
++			if (retries++ < 20) {
++				setTimeout(loadPage, 250);
++			} else {
++				console.error("加载主页面失败", error);
++			}
++		});
++	};
++	win.webContents.on("did-fail-load", (_event, _errorCode, _errorDescription, _validatedURL, isMainFrame) => {
++		if (isMainFrame && retries++ < 20) setTimeout(loadPage, 250);
++	});
++	loadPage();
+ 	remote.enable(win.webContents);
+ 	const menuTemplate: Electron.MenuItemConstructorOptions[] = [
+ 		{
  			label: "操作",
  			submenu: [
  				{
@@ -465,7 +368,7 @@ index 7a0a6dd..1c2c485 100644
  					click: () => {
  						shell.showItemInFolder(path.join(app.getAppPath(), "app"));
  					},
-@@ -152,7 +152,7 @@ function createMainWindow() {
+@@ -152,7 +198,7 @@ function createMainWindow() {
  					click: () => {
  						dialog.showMessageBoxSync(win, {
  							message:
@@ -474,11 +377,24 @@ index 7a0a6dd..1c2c485 100644
  							type: "info",
  							title: "版权声明",
  							icon: path.join(app.getAppPath(), "app", "noname.ico"),
+@@ -167,10 +213,10 @@ function createMainWindow() {
+ }
+ 
+ app.whenReady().then(() => {
+-	createWindow();
++	void createWindow();
+ 	app.on("activate", () => {
+ 		if (BrowserWindow.getAllWindows().length === 0) {
+-			createWindow();
++			void createWindow();
+ 		}
+ 	});
+ });
 diff --git a/apps/electron/build.ts b/apps/electron/build.ts
-index 1fc32518c827d9b13ef109a8bb7bcf4a40f8fb06..cf65d786917a43ea94c7033a49498cf23c3d0aad 100644
+index 1fc3251..35cfb08 100644
 --- a/apps/electron/build.ts
 +++ b/apps/electron/build.ts
-@@ -5,15 +5,18 @@
+@@ -5,14 +5,21 @@ async function main(targets: PackagerOptions["targets"], config: Partial<Configu
  	const appPaths = await buildElectron({
  		config: {
  			asar: false,
@@ -497,11 +413,13 @@ index 1fc32518c827d9b13ef109a8bb7bcf4a40f8fb06..cf65d786917a43ea94c7033a49498cf2
  			files: [
  				{ from: "dist", to: "" },
  				{ from: "../../dist", to: "" },
--				{ from: "../../dist/node_modules", to: "node_modules" },
++				// Vite leaves a few browser dependencies as import-map URLs. Keep
++				// the generated pnpm store in the packaged app so those URLs work
++				// when the app is launched outside the development workspace.
+ 				{ from: "../../dist/node_modules", to: "node_modules" },
  				"package.json",
  			],
- 			extraMetadata: {
-@@ -45,7 +48,7 @@
+@@ -45,7 +52,7 @@ switch (process.argv[2]) {
  		main(Platform.LINUX.createTarget("AppImage", Arch.x64));
  		break;
  	case "macos":
@@ -1447,3 +1365,17 @@ index 369572f..b6b8998 100644
 -!英雄杀/**
 \ No newline at end of file
 +!英雄杀/**
+diff --git a/apps/electron/package.runtime.json b/apps/electron/package.runtime.json
+new file mode 100644
+index 0000000..e01ff70
+--- /dev/null
++++ b/apps/electron/package.runtime.json
+@@ -0,0 +1,8 @@
++{
++  "name": "fate-reborn-demo",
++  "productName": "宿命Reborn试玩版",
++  "version": "0.1.0",
++  "type": "module",
++  "main": "app/main.js",
++  "license": "GPL-3.0-only"
++}

@@ -120,6 +120,8 @@ export const EQUIPMENT_SKILLS = {
     position: "h",
     selectCard: 2,
     filterCard: true,
+    hiddenCard(player, name) { return name === "wuxie" && player.countCards("h") >= 2; },
+    viewAsFilter(player) { return player.countCards("h") >= 2; },
     viewAs: { name: "wuxie" },
     prompt: "将两张手牌当驱散使用",
     check(card) {
@@ -133,11 +135,14 @@ export const EQUIPMENT_SKILLS = {
     filterCard(card) {
       return get.color(card) === "black";
     },
+    hiddenCard(player, name) { return name === "shan" && player.countCards("h", card => get.color(card) === "black") > 0; },
+    viewAsFilter(player) { return player.countCards("h", card => get.color(card) === "black") > 0; },
     viewAs: { name: "shan" },
     prompt: "将一张黑色手牌当闪避使用或打出",
     check(card) {
       return 6 - get.value(card);
     },
+    ai: { respondShan: true },
   },
   fate_desolator_skill: {
     equipSkill: true,

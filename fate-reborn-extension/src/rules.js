@@ -13,8 +13,8 @@ export const FIVE_PLAYER_IDENTITIES = Object.freeze([
 ]);
 
 export const FATES = Object.freeze([
-  { id: "shadow_punisher", name: "暗影惩戒者", text: "天灾军团全灭。" },
-  { id: "holy_conqueror", name: "圣光征服者", text: "近卫军团全灭。" },
+  { id: "shadow_punisher", name: "暗影惩戒者", text: "夜魇军团全灭。" },
+  { id: "holy_conqueror", name: "圣光征服者", text: "天辉军团全灭。" },
   { id: "spreading_plague", name: "蔓延的瘟疫", text: "开局左侧和右侧的角色均已死亡。" },
   { id: "fate_gamble", name: "命运的博弈", text: "场上仅剩三名不同阵营的角色。" },
   { id: "backlash_puppet", name: "反噬的傀儡", text: "固定座位下家胜利时，代替其获胜。" },
