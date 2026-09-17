@@ -8,7 +8,7 @@ import { INTELLIGENCE_HERO_CARDS, INTELLIGENCE_HERO_SKILLS, INTELLIGENCE_HERO_TR
 import { AGILITY_HERO_CARDS, AGILITY_HERO_SKILLS, AGILITY_HERO_TRANSLATIONS } from "./heroes-agility.js";
 import { gainFateRage } from "./rage.js";
 import { ACTIVE_DECK, FATES, FACTION, dealPlayerIdentities, evaluateWinner } from "./rules.js";
-import { FATE_LAYOUT_STYLE, installFateLayout } from "./ui-layout.js";
+import { FATE_LAYOUT_STYLE, installFateLayout, showFateMission } from "./ui-layout.js";
 
 import { limitCastSkills, castOrder } from "./cast-window.js";
 import { addSkillVoiceInterfaces, heroDeathVoiceTag } from "./voice.js";
@@ -330,11 +330,9 @@ function createMode(testing = false) {
           game.log("#y测试对局：胜负检查已关闭，可自由验证技能。");
         }
         if (game.me.identity === FACTION.NEUTRAL) {
-          await game.me
-            .chooseControl("我已了解")
-            .set("prompt", `你的中立任务：${game.fateReborn.fate.name}`)
-            .set("prompt2", game.fateReborn.fate.text)
-            .forResult();
+          // Do not use the engine's generic identity/choice dialog here: it
+          // brings back the Noname background and cannot be revisited later.
+          await showFateMission({ blocking: true });
         }
       },
       async (event) => {

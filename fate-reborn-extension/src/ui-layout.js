@@ -2,6 +2,31 @@ import { game, lib, ui, get, _status } from "noname";
 import { hudSeats, hudSelfSeat } from "./hud-geometry.js";
 import { isFateResponse, isFatePhaseUse, isFateInteraction, canConfirmInteraction, canCancelInteraction, shouldShowNativeConfirmation } from "./response-ui.js";
 
+export function fateMission() {
+  const fate = game.fateReborn?.fate;
+  return fate ? { name: fate.name, text: fate.text } : null;
+}
+
+/** A Fate-native mission sheet, used both at setup and from the HUD. */
+export function showFateMission({ blocking = false } = {}) {
+  const mission = fateMission();
+  if (!mission || !document.body) return Promise.resolve();
+  document.querySelector('.fate-mission-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'fate-mission-overlay';
+  overlay.innerHTML = `<section class="fate-mission-sheet" role="dialog" aria-modal="true" aria-label="中立宿命任务">
+    <div class="fate-mission-kicker">中立 · 宿命任务</div>
+    <h2></h2><p></p><div class="fate-mission-rule">达成条件会在每次结算后检查。中立任务优先于阵营胜利。</div>
+    <button type="button">${blocking ? '我已了解' : '关闭'}</button>
+  </section>`;
+  overlay.querySelector('h2').textContent = mission.name;
+  overlay.querySelector('p').textContent = mission.text;
+  document.body.appendChild(overlay);
+  return new Promise(resolve => {
+    overlay.querySelector('button').addEventListener('click', () => { overlay.remove(); resolve(); }, { once: true });
+  });
+}
+
 /**
  * Fate Reborn table HUD; native engine handlers still own game interactions.
  *
@@ -280,6 +305,15 @@ const HUD_STYLE = `
 .fate-hud .fate-self-status .fate-icon-placeholder {width:24px;height:24px;}
 .fate-hud #arena .fate-native-skills {display:none!important;}
 .fate-hud #arena .fate-self > .equips,.fate-hud #arena .fate-self > .marks {display:none!important;}
+.fate-hud .fate-mission-toggle {position:absolute;right:242px;top:12px;z-index:8;padding:7px 12px;color:#ead7a8;background:linear-gradient(#394047,#1c2429);border:1px solid #9b8353;border-radius:4px;font:14px sans-serif;cursor:pointer;}
+.fate-hud .fate-mission-toggle:hover {border-color:#e1c27c;color:#fff1c9;}
+.fate-mission-overlay {position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#172229cc,#060a0ddd);font:16px sans-serif;color:#e8dfcb;}
+.fate-mission-sheet {width:min(520px,calc(100vw - 48px));box-sizing:border-box;padding:34px 38px 30px;background:linear-gradient(145deg,#273338,#10181d);border:1px solid #a98a50;box-shadow:0 18px 50px #000b,inset 0 0 38px #9270311a;text-align:center;}
+.fate-mission-kicker {color:#9db8af;letter-spacing:4px;font-size:13px;}
+.fate-mission-sheet h2 {margin:17px 0 12px;color:#e8c77e;font:30px Georgia,serif;}
+.fate-mission-sheet p {margin:0;color:#f2eee4;font-size:20px;line-height:1.7;}
+.fate-mission-rule {margin:24px 0 20px;padding-top:15px;border-top:1px solid #665942;color:#aeb9b6;font-size:13px;line-height:1.6;}
+.fate-mission-sheet button {min-width:130px;padding:10px 20px;color:#fff0c9;background:linear-gradient(#806637,#43341d);border:1px solid #d9b768;border-radius:3px;font:16px sans-serif;cursor:pointer;}
 `;
 
 function element(tag, className, parent, text) {
@@ -310,6 +344,8 @@ function ensureHud() {
   element('strong', '', logPanel, '对局记录');
   const log = element('div', 'fate-log-content', logPanel);
   const summary = element('div', 'fate-summary', ui.arena);
+  const missionButton = element('button', 'fate-mission-toggle', ui.arena, '宿命任务');
+  missionButton.addEventListener('click', () => { showFateMission(); });
   const status = element('div', 'fate-self-status', ui.arena);
   const response = element('div','fate-response-bar',ui.arena); response.hidden=true;
   const responseText=element('span','fate-response-text',response);
@@ -346,7 +382,7 @@ function ensureHud() {
     }
     ui.click.cancel();
   });
-  const hud = ui.fateHud = {arena:ui.arena, slots, skills, log, summary, status, response, responseText, responseControls, responseConfirm, responseCancel, endTurn, follow:true, entries:new WeakSet(), skillNodes:new Map(), width:0};
+  const hud = ui.fateHud = {arena:ui.arena, slots, skills, log, summary, missionButton, status, response, responseText, responseControls, responseConfirm, responseCancel, endTurn, follow:true, entries:new WeakSet(), skillNodes:new Map(), width:0};
   log.addEventListener('scroll', () => {hud.follow = log.scrollHeight-log.scrollTop-log.clientHeight < 24;});
   if (ui.sidebar) {
     const observer = new MutationObserver(records => {
@@ -369,6 +405,7 @@ function ensureHud() {
 function updateHud() {
   if (!game.me?.name) return;
   const hud = ensureHud();
+  hud.missionButton.hidden = game.me.identity !== 'fate_neutral' || !fateMission();
   if(hud.endPhaseRoot&&_status.event===hud.endPhaseRoot) {
     hud.endPhaseRoot=null;
     ui.click.cancel();
