@@ -106,7 +106,7 @@ index ded7ad3..d3c9060 100644
  		"use strict";
  		(() => {
 diff --git a/apps/core/noname/init/index.ts b/apps/core/noname/init/index.ts
-index 07358a6..88029a5 100644
+index 07358a6..b5a3060 100644
 --- a/apps/core/noname/init/index.ts
 +++ b/apps/core/noname/init/index.ts
 @@ -328,6 +328,7 @@ export async function boot() {
@@ -117,12 +117,16 @@ index 07358a6..88029a5 100644
  	localStorage.removeItem("show_splash_off");
  
  	if (localStorage.getItem(`${lib.configprefix}playback`)) {
-@@ -872,6 +873,17 @@ async function loadConfig() {
+@@ -872,6 +873,21 @@ async function loadConfig() {
  		}
  	}
  
 +	// 独立试玩版固定进入宿命并启用宿命扩展。
 +	if (config.get("fate_standalone")) {
++		// A prior Noname session may leave this localStorage flag behind.  It
++		// bypasses getExtensionList() altogether, so the Fate mode is never
++		// registered and the standalone app falls back to the generic homepage.
++		localStorage.removeItem(lib.configprefix + "disable_extension");
 +		config.set("mode", "fate_reborn");
 +		config.set("extensions", ["fate-reborn"]);
 +		config.set("extension_fate-reborn_enable", true);
