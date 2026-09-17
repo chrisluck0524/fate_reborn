@@ -5,8 +5,10 @@ export async function freezeIcePrison(caster, target, cards) {
   expansion.gaintag.add('fate_ice_prison');
   await expansion;
   caster.storage.fate_ice_prison_target = target.playerid;
-  target.addTempSkill('fate_ice_prison_target', { global: 'phaseAfter' });
-  // A temp skill expiring at phaseAfter can be removed before its own trigger.
+  // The frozen cards last through the caster's whole turn.  A global
+  // phaseAfter temp expiry may remove this marker after an unrelated player
+  // finishes first, so keep it until the release routine clears it.
+  target.addSkill('fate_ice_prison_target');
   caster.addSkill('fate_ice_prison_release');
 }
 

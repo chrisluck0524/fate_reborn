@@ -1365,17 +1365,3 @@ index 369572f..b6b8998 100644
 -!英雄杀/**
 \ No newline at end of file
 +!英雄杀/**
-diff --git a/apps/electron/package.runtime.json b/apps/electron/package.runtime.json
-new file mode 100644
-index 0000000..e01ff70
---- /dev/null
-+++ b/apps/electron/package.runtime.json
-@@ -0,0 +1,8 @@
-+{
-+  "name": "fate-reborn-demo",
-+  "productName": "宿命Reborn试玩版",
-+  "version": "0.1.0",
-+  "type": "module",
-+  "main": "app/main.js",
-+  "license": "GPL-3.0-only"
-+}
