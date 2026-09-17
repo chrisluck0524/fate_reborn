@@ -325,12 +325,8 @@ function createMode(testing = false) {
         game.me.node.identity.classList.remove("guessing");
         knownNext.setIdentity(knownNext.identity);
         knownNext.node.identity.classList.remove("guessing");
-        const visibleRoshan = [game.me, knownNext].find(player => player.identity === FACTION.NEUTRAL && player.isAlive());
-        if (visibleRoshan) game.fateReborn.pendingRoshanId = visibleRoshan.playerid;
         if (isTesting) {
           game.showIdentity();
-          const testRoshan = game.players.find(player => player.identity === FACTION.NEUTRAL && player.isAlive());
-          if (testRoshan) game.fateReborn.pendingRoshanId = testRoshan.playerid;
           game.log("#y测试对局：胜负检查已关闭，可自由验证技能。");
         }
         if (game.me.identity === FACTION.NEUTRAL) {
@@ -375,9 +371,10 @@ function createMode(testing = false) {
             if (setup.rage) player.addMark("fate_rage_rule", setup.rage);
           }
         }
-        const pendingRoshan = game.players.find(player => player.playerid === game.fateReborn.pendingRoshanId);
-        if (pendingRoshan) await activateRoshan(pendingRoshan);
-        delete game.fateReborn.pendingRoshanId;
+        // A neutral player being known to themselves or to their fixed
+        // neighbour is not a public reveal.  Roshan must never activate as a
+        // side effect of game setup; its mass-death resolution is reserved
+        // for an explicit public reveal.
         await game.phaseLoop(game.fateReborn.firstPlayer || game.players.randomGet());
       },
     ],
