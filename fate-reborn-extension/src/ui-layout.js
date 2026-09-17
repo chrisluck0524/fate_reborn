@@ -7,6 +7,31 @@ export function fateMission() {
   return fate ? { name: fate.name, text: fate.text } : null;
 }
 
+function fateMissionProgress() {
+  const fate = game.fateReborn?.fate;
+  const players = allPlayers();
+  const alive = players.filter(player => player.isAlive?.());
+  const count = identity => alive.filter(player => player.identity === identity).length;
+  switch (fate?.id) {
+    case 'shadow_punisher': return `任务进度：夜魇存活 ${count('fate_scourge')} 名`;
+    case 'holy_conqueror': return `任务进度：天辉存活 ${count('fate_sentinel')} 名`;
+    case 'spreading_plague': {
+      const neighbours = game.me?.storage?.fate_neighbors || [];
+      const dead = neighbours.filter(id => !alive.some(player => player.playerid === id)).length;
+      return `任务进度：相邻角色已死亡 ${dead}/2 名`;
+    }
+    case 'fate_gamble': return `任务进度：存活 ${alive.length} 名，存活阵营 ${new Set(alive.map(player => player.identity)).size} 种`;
+    case 'backlash_puppet': {
+      const successor = players.find(player => player.playerid === game.me?.storage?.fate_successor);
+      return `固定下家：${successor ? get.translation(successor.name) : '未确定'}胜利时，由你代替其胜利。`;
+    }
+    case 'death_caller': return `任务进度：其他存活角色血量不高于2点 ${alive.filter(player => player !== game.me && player.hp <= 2).length}/${Math.max(0, alive.length - 1)} 名`;
+    case 'paranoid_mathematician': return `任务进度：怒气为奇数的存活角色 ${alive.filter(player => player.countMark?.('fate_rage_rule') % 2 === 1).length}/${alive.length} 名`;
+    case 'roshan': return game.me?.storage?.fate_roshan_revealed ? 'Roshan已公开：成为场上最后的存活角色。' : 'Roshan尚未公开。';
+    default: return '任务进度将在每次结算后更新。';
+  }
+}
+
 /** A Fate-native mission sheet, used both at setup and from the HUD. */
 export function showFateMission({ blocking = false } = {}) {
   const mission = fateMission();
@@ -16,14 +41,18 @@ export function showFateMission({ blocking = false } = {}) {
   overlay.className = 'fate-mission-overlay';
   overlay.innerHTML = `<section class="fate-mission-sheet" role="dialog" aria-modal="true" aria-label="中立宿命任务">
     <div class="fate-mission-kicker">中立 · 宿命任务</div>
-    <h2></h2><p></p><div class="fate-mission-rule">达成条件会在每次结算后检查。中立任务优先于阵营胜利。</div>
+    <h2></h2><p></p><div class="fate-mission-progress"></div><div class="fate-mission-rule">达成条件会在每次结算后检查。中立任务优先于阵营胜利。</div>
     <button type="button">${blocking ? '我已了解' : '关闭'}</button>
   </section>`;
   overlay.querySelector('h2').textContent = mission.name;
   overlay.querySelector('p').textContent = mission.text;
+  overlay.querySelector('.fate-mission-progress').textContent = fateMissionProgress();
   document.body.appendChild(overlay);
   return new Promise(resolve => {
-    overlay.querySelector('button').addEventListener('click', () => { overlay.remove(); resolve(); }, { once: true });
+    const close = () => { document.removeEventListener('keydown', onKeydown); overlay.remove(); resolve(); };
+    const onKeydown = event => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKeydown);
+    overlay.querySelector('button').addEventListener('click', close, { once: true });
   });
 }
 
@@ -312,7 +341,8 @@ const HUD_STYLE = `
 .fate-mission-kicker {color:#9db8af;letter-spacing:4px;font-size:13px;}
 .fate-mission-sheet h2 {margin:17px 0 12px;color:#e8c77e;font:30px Georgia,serif;}
 .fate-mission-sheet p {margin:0;color:#f2eee4;font-size:20px;line-height:1.7;}
-.fate-mission-rule {margin:24px 0 20px;padding-top:15px;border-top:1px solid #665942;color:#aeb9b6;font-size:13px;line-height:1.6;}
+.fate-mission-progress {margin:20px 0 0;padding:10px 13px;background:#0b1116a6;border:1px solid #4f674f;color:#b8e3ad;font-size:14px;line-height:1.5;}
+.fate-mission-rule {margin:18px 0 20px;padding-top:15px;border-top:1px solid #665942;color:#aeb9b6;font-size:13px;line-height:1.6;}
 .fate-mission-sheet button {min-width:130px;padding:10px 20px;color:#fff0c9;background:linear-gradient(#806637,#43341d);border:1px solid #d9b768;border-radius:3px;font:16px sans-serif;cursor:pointer;}
 `;
 
